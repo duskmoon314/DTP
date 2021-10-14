@@ -924,6 +924,8 @@ static void timeout_cb(EV_P_ ev_timer *w, int revents) {
         HASH_DELETE(hh, conns->h, conn_io);
 
         ev_timer_stop(loop, &conn_io->timer);
+        ev_timer_stop(loop, &conn_io->first_pace_timer);
+        ev_timer_stop(loop, &conn_io->second_pace_timer);
         quiche_conn_free(conn_io->conn);
         free(conn_io);
 
