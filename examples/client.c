@@ -165,9 +165,9 @@ int flush_packets(struct conn_io *conn_io, int path) {
     return 0;
 }
 
-static void debug_log(const char *line, void *argp) {
-    fprintf(stderr, "%s\n", line);
-}
+// static void debug_log(const char *line, void *argp) {
+//     fprintf(stderr, "%s\n", line);
+// }
 
 static void flush_egress(struct ev_loop *loop, struct conn_io *conn_io, int path) {
     fprintf(stderr, "--flush egress-------\n");
@@ -175,6 +175,9 @@ static void flush_egress(struct ev_loop *loop, struct conn_io *conn_io, int path
 
     double t = quiche_conn_timeout_as_nanos(conn_io->conn) / 1e9f;
     fprintf(stderr, "ts: %f\n", t);
+    if(t < 0.0000001) {
+        t = 0.000001;
+    }
     conn_io->timer.repeat = t;
     ev_timer_again(loop, &conn_io->timer);
 
@@ -749,6 +752,8 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "sock start\n");
 
     ev_loop(loop, 0);
+
+    // fprintf(stderr, "loop end\n");
 
     freeaddrinfo(peer);
 

@@ -19,7 +19,9 @@ LDFLAGS = -L$(LIBCRYPTO_DIR) -L$(LIBSSL_DIR) -L$(LIB_DIR)
 
 LIBS = $(LIB_DIR)/libquiche.a -lev -ldl -pthread -lm -luv
 
-all: client server 
+all: client server
+
+all-uv: server-libuv client-libuv
 
 client: client.c $(INCLUDE_DIR)/quiche.h $(LIB_DIR)/libquiche.a
 	$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@ $(INCS) $(LIBS)

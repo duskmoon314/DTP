@@ -1,0 +1,64 @@
+version: "3"
+
+services:
+  server:
+    # image: duskmoon/mpdtp_test:base
+    image: duskmoon/mpdtp_test:uv
+    container_name: mpdtp_test_base_server
+    hostname: server
+    stdin_open: true
+    tty: true
+    environment:
+      - ROLE=server
+    cap_add:
+      - NET_ADMIN
+    networks:
+      mp_net1:
+        ipv4_address: 192.178.32.2
+      mp_net2:
+        ipv4_address: 192.178.33.2
+
+  client:
+    # image: duskmoon/mpdtp_test:base
+    image: duskmoon/mpdtp_test:uv
+    container_name: mpdtp_test_base_client
+    hostname: client
+    stdin_open: true
+    tty: true
+    environment:
+      - ROLE=client
+    cap_add:
+      - NET_ADMIN
+    networks:
+      mp_net1:
+        ipv4_address: 192.178.32.3
+      mp_net2:
+        ipv4_address: 192.178.33.3
+
+  router:
+    image: duskmoon/dev-env:alpine-3.14-tc
+    container_name: mpdtp_test_base_router
+    hostname: router
+    stdin_open: true
+    tty: true
+    environment:
+      - ROLE=router
+    cap_add:
+      - NET_ADMIN
+    networks:
+      mp_net1:
+        ipv4_address: 192.178.32.10
+      mp_net2:
+        ipv4_address: 192.178.33.10
+
+networks:
+  mp_net1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.178.32.0/24
+  mp_net2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.178.33.0/24

@@ -136,9 +136,9 @@ bool MP_conn_finished = false;
 struct conn_io *conn_io_outside = NULL;
 
 static void timeout_cb(EV_P_ ev_timer *w, int revents);
-static void debug_log(const char *line, void *argp) {
-    fprintf(stderr, "%s\n", line);
-}
+// static void debug_log(const char *line, void *argp) {
+//     fprintf(stderr, "%s\n", line);
+// }
 
 static void flush_egress(struct ev_loop *loop, struct conn_io *conn_io) {
     fprintf(stderr, "------flush egress------\n");
@@ -377,6 +377,9 @@ static void flush_egress(struct ev_loop *loop, struct conn_io *conn_io) {
 
     double t = quiche_conn_timeout_as_nanos(conn_io->conn) / 1e9f;
     fprintf(stderr, "ts: %f", t);
+    if(t < 0.0000001) {
+        t = 0.000001;
+    }
     conn_io->timer.repeat = t;
     ev_timer_again(loop, &conn_io->timer);
 
@@ -926,6 +929,7 @@ static void timeout_cb(EV_P_ ev_timer *w, int revents) {
         ev_timer_stop(loop, &conn_io->timer);
         ev_timer_stop(loop, &conn_io->first_pace_timer);
         ev_timer_stop(loop, &conn_io->second_pace_timer);
+        // ev_timer_stop(loop, &conn_io_outside->sender);
         quiche_conn_free(conn_io->conn);
         free(conn_io);
 
@@ -976,7 +980,7 @@ int main(int argc, char *argv[]) {
                                    .ai_socktype = SOCK_DGRAM,
                                    .ai_protocol = IPPROTO_UDP};
 
-    /* quiche_enable_debug_logging(debug_log, NULL); */
+    // quiche_enable_debug_logging(debug_log, NULL);
 
     struct addrinfo *local;
     if (getaddrinfo(host, port, &hints, &local) != 0) {

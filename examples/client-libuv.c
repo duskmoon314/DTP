@@ -162,9 +162,12 @@ static void flush_egress(struct conn_io *conn_io, int path) {
 
 static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
                     const struct sockaddr *addr, unsigned flags) {
+    if (!nread) {
+        return;
+    }
     struct conn_io *conn_io = req->data;
     int path = req == conn_io->paths[0] ? 0 : 1;
-    uint8_t buf[MAX_BLOCK_SIZE];
+    static uint8_t buf_on_read[MAX_BLOCK_SIZE];
     uint8_t read_time[TIME_SIZE];
     fprintf(stderr, "-----------------recv_cb------------------\n");
 
@@ -181,14 +184,14 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
             "first_path: server to client -> UDP trans time: %" PRIu64 "\n",
             t2 - t1);
     for (int i = TIME_SIZE, j = 0; j < nread; i++, j++) {
-        buf[j] = buf_with_time->base[i];
+        buf_on_read[j] = buf_with_time->base[i];
     }
 
     /**************************************************/
     nread -= TIME_SIZE;
 
     uint64_t quiche_conn_recv_begin_time = getCurrentTime_mic();
-    ssize_t done = quiche_conn_recv(conn_io->conn, buf, nread, path);
+    ssize_t done = quiche_conn_recv(conn_io->conn, buf_on_read, nread, path);
     uint64_t quiche_conn_recv_end_time = getCurrentTime_mic();
     fprintf(stderr, "First path: quiche_conn_recv time: %" PRIu64 "\n",
             quiche_conn_recv_end_time - quiche_conn_recv_begin_time);
@@ -217,8 +220,8 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
             bool fin = false;
 
             uint64_t quiche_conn_stream_recv_begin_time = getCurrentTime_mic();
-            ssize_t recv_len = quiche_conn_stream_recv(conn_io->conn, s, buf,
-                                                       sizeof(buf), &fin);
+            ssize_t recv_len = quiche_conn_stream_recv(conn_io->conn, s, buf_on_read,
+                                                       sizeof(buf_on_read), &fin);
             uint64_t quiche_conn_stream_recv_end_time = getCurrentTime_mic();
             fprintf(stderr,
                     "First path: quiche_conn_stream_recv time: %" PRIu64 "\n",
