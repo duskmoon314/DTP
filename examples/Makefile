@@ -45,4 +45,4 @@ $(LIB_DIR)/libquiche.a: $(shell find $(SOURCE_DIR) -type f -name '*.rs')
 	cd .. && cargo build --release --target-dir $(BUILD_DIR)
 
 clean:
-	@$(RM) -rf client server build/
+	@$(RM) -rf client server client-libuv server-libuv build/

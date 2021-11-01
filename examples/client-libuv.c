@@ -25,6 +25,7 @@
 // NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <assert.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -115,7 +116,7 @@ int flush_packets(struct conn_io *conn_io, int path) {
         ssize_t written =
             quiche_conn_send(conn_io->conn, out, sizeof(out), path);
         uint64_t quiche_conn_send_end_time = getCurrentTime_mic();
-        fprintf(stderr, "First path: quiche_conn_send time: %" PRIu64 "\n",
+        fprintf(stderr, "path %d: quiche_conn_send time: %" PRIu64 "\n", path,
                 quiche_conn_send_end_time - quiche_conn_send_begin_time);
 
         fprintf(stderr, "written %ld\n", written);
@@ -139,7 +140,7 @@ static void debug_log(const char *line, void *argp) {
 }
 
 static void flush_egress(struct conn_io *conn_io, int path) {
-    fprintf(stderr, "--flush egress-------\n");
+    fprintf(stderr, "--flush egress path %d-------\n", path);
     flush_packets(conn_io, path);
 
     int t = quiche_conn_timeout_as_nanos(conn_io->conn) / 1e6f;
@@ -148,12 +149,18 @@ static void flush_egress(struct conn_io *conn_io, int path) {
     uv_timer_again(&conn_io->timer);
 
     if (quiche_conn_is_established(conn_io->conn) &&
-        !conn_io->first_udp_packet) {
+        !(conn_io->first_udp_packet)) {
         // connection建立起来之后，启动handshake of second path.
         fprintf(stderr, "Send first packet of second path\n");
         uint8_t out[MAX_DATAGRAM_SIZE] = "Second";
+        // int ret = quiche_conn_stream_send(conn_io->conn, 0, out, sizeof("Second"), true);
+        // fprintf(stderr, "ret %d\n", ret);
+        // ssize_t written = quiche_conn_send(conn_io->conn, out, sizeof(out), path);
+        // fprintf(stderr, "path 2 first packet out %s %ld\n", out, written);
         send_packet(conn_io, out, sizeof("Second"), 1);
         conn_io->first_udp_packet = true;
+        // assert(path == 0);
+        // flush_packets(conn_io, 0);
     }
 
     fprintf(stderr, "conn establish %d\n",
@@ -169,7 +176,7 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
     int path = req == conn_io->paths[0] ? 0 : 1;
     static uint8_t buf_on_read[MAX_BLOCK_SIZE];
     uint8_t read_time[TIME_SIZE];
-    fprintf(stderr, "-----------------recv_cb------------------\n");
+    fprintf(stderr, "-----------------recv_cb-path %d-----------\n", path);
 
     /**************************************************/
     for (int i = 0; i < TIME_SIZE; i++) {

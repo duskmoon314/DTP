@@ -96,6 +96,7 @@ struct conn_io {
 static quiche_config *config = NULL;
 uv_loop_t *loop = NULL;
 struct connections *conns = NULL;
+struct conn_io *conn_io_ = NULL;
 
 // MP: PCID(default for second path)
 uint8_t server_pcid[LOCAL_CONN_ID_LEN];
@@ -168,7 +169,7 @@ int flush_packets_pacing(struct conn_io *conn_io, int path) {
             can_send_increase;  //(bits/8)/s * s = bytes
         conn_io->pacers[path].t_last = t_now;
         if (conn_io->pacers[path].can_send < 1350) {
-            fprintf(stderr, "first path can_send < 1350\n");
+            fprintf(stderr, "path %d can_send < 1350\n", path);
             uv_timer_set_repeat(&conn_io->pacers[path].pacer_timer, 1);
             uv_timer_again(&conn_io->pacers[path].pacer_timer);
             break;
@@ -181,12 +182,12 @@ int flush_packets_pacing(struct conn_io *conn_io, int path) {
                             (const struct sockaddr*)&conn_io->pacers[path].peer_addr, out, written);
                 conn_io->pacers[path].can_send -= written;
             } else if (written < -1) {
-                fprintf(stderr, "failed to create packet on first path: %zd\n",
+                fprintf(stderr, "failed to create packet on path %d: %zd\n", path,
                         written);
                 return -1;
             } else if (written == QUICHE_ERR_DONE) {
                 // conn_io->can_send = 1350;  // app_limited
-                fprintf(stderr, "first path done writing\n");
+                fprintf(stderr, "path %d done writing\n", path);
                 conn_io->pacers[path].done_writing = true;  // app_limited
                 break;
             }
@@ -337,6 +338,7 @@ static struct conn_io *create_conn(uint8_t *odcid, size_t odcid_len) {
     uv_timer_start(&conn_io->timer, timeout_cb, 100000, 0);
 
     conn_io->pacers[0].pacer_timer.data = conn_io;
+    conn_io->pacers[1].pacer_timer.data = conn_io; // TODO: Is thie necessary?
     uv_timer_init(loop, &conn_io->pacers[0].pacer_timer);
     uv_timer_init(loop, &conn_io->pacers[1].pacer_timer);
 
@@ -360,7 +362,8 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
     uint8_t read_time[TIME_SIZE];
     uint8_t out_process[MAX_DATAGRAM_SIZE];
     static uint8_t first_pkt_of_second_path[] = "Second";
-    fprintf(stderr, "-----------------recv_cb------------------\n");
+    fprintf(stderr, "-----------------recv_cb-nread %ld----------\n", nread);
+    fprintf(stderr, "path %d buf_with_time %s\n", req == conns->paths[0] ? 0 : 1, buf_with_time->base);
 
     for (int i = 0; i < TIME_SIZE; i++) {
         read_time[i] = buf_with_time->base[i];
@@ -376,6 +379,34 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
         buf_on_read[j] = buf_with_time->base[i];
     }
     nread -= 2 * TIME_SIZE;
+    fprintf(stderr, "buf_on_read %s", buf_on_read);
+
+    if (memcmp(buf_on_read, first_pkt_of_second_path,
+               sizeof(first_pkt_of_second_path)) == 0) {
+    // if (strstr((char *)buf_on_read, (char *)first_pkt_of_second_path)) {
+        fprintf(stderr,
+                "**********************recv udp pkt from second "
+                "address**********************\n");
+
+        if (!conn_io_->MP_conn_finished) {
+            memcpy(&conn_io_->pacers[1].peer_addr, addr,
+                   sizeof(struct sockaddr));
+            conn_io_->pacers[1].peer_addr_len = sizeof(struct sockaddr);
+            fprintf(stderr,
+                    "**************second address get!***************\n");
+            quiche_conn_second_path_is_established(conn_io_->conn);
+            conn_io_->MP_conn_finished = true;
+
+            // after two paths built, blocks are sent.
+            // start sending immediately and repeat every 50ms.
+            // TODO init sender timer first.
+            uv_timer_start(&conn_io_->sender, sender_cb, 0, 100);
+            conn_io_->sender.data = conn_io_;
+        }
+        uv_timer_start(&conn_io_->pacers[1].pacer_timer, flush_egress_second_pace, 0,
+                    0);  // TODO do we need to start immediately?
+        return;
+    }
 
     uint8_t type;
     uint32_t version;
@@ -396,7 +427,7 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
         quiche_header_info(buf_on_read, nread, LOCAL_CONN_ID_LEN, &version, &type, scid,
                            &scid_len, dcid, &dcid_len, token, &token_len);
 
-    fprintf(stderr, "token_len : %ld\n", token_len);
+    fprintf(stderr, "rc: %d token_len : %ld\n", rc, token_len);
     if (rc < 0) {
         fprintf(stderr, "failed to parse header: %d\n", rc);
         return;
@@ -470,6 +501,7 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
         }
 
         conn_io = create_conn(odcid, odcid_len);
+        conn_io_ = conn_io;
         conns->h = conn_io;
         if (conn_io == NULL) {
             return;
@@ -488,31 +520,32 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
                     0);  // TODO do we need to start immediately?
     }
 
-    if (memcmp(buf_on_read, first_pkt_of_second_path,
-               sizeof(first_pkt_of_second_path)) == 0) {
-        fprintf(stderr,
-                "**********************recv udp pkt from second "
-                "address**********************\n");
+    // if (memcmp(buf_on_read, first_pkt_of_second_path,
+    //            sizeof(first_pkt_of_second_path)) == 0) {
+    // if (strstr((char *)buf_on_read, (char *)first_pkt_of_second_path)) {
+    //     fprintf(stderr,
+    //             "**********************recv udp pkt from second "
+    //             "address**********************\n");
 
-        if (!conn_io->MP_conn_finished) {
-            memcpy(&conn_io->pacers[1].peer_addr, addr,
-                   sizeof(struct sockaddr));
-            conn_io->pacers[1].peer_addr_len = sizeof(struct sockaddr);
-            fprintf(stderr,
-                    "**************second address get!***************\n");
-            quiche_conn_second_path_is_established(conn_io->conn);
-            conn_io->MP_conn_finished = true;
+    //     if (!conn_io->MP_conn_finished) {
+    //         memcpy(&conn_io->pacers[1].peer_addr, addr,
+    //                sizeof(struct sockaddr));
+    //         conn_io->pacers[1].peer_addr_len = sizeof(struct sockaddr);
+    //         fprintf(stderr,
+    //                 "**************second address get!***************\n");
+    //         quiche_conn_second_path_is_established(conn_io->conn);
+    //         conn_io->MP_conn_finished = true;
 
-            // after two paths built, blocks are sent.
-            // start sending immediately and repeat every 50ms.
-            // TODO init sender timer first.
-            uv_timer_start(&conn_io->sender, sender_cb, 0, 100);
-            conn_io->sender.data = conn_io;
-        }
-        uv_timer_start(&conn_io->pacers[1].pacer_timer, flush_egress_second_pace, 0,
-                    0);  // TODO do we need to start immediately?
-        return;
-    }
+    //         // after two paths built, blocks are sent.
+    //         // start sending immediately and repeat every 50ms.
+    //         // TODO init sender timer first.
+    //         uv_timer_start(&conn_io->sender, sender_cb, 0, 100);
+    //         conn_io->sender.data = conn_io;
+    //     }
+    //     uv_timer_start(&conn_io->pacers[1].pacer_timer, flush_egress_second_pace, 0,
+    //                 0);  // TODO do we need to start immediately?
+    //     return;
+    // }
 
     // TODO will this work?
     int path = req == conns->paths[0] ? 0 : 1;
