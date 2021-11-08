@@ -51,6 +51,11 @@
 #define TIME_SIZE 8
 static uint64_t chunk_before_deadline = 0;
 static uint64_t recv_num = 0;
+static uint64_t recv_num_0 = 0;
+static uint64_t recv_num_1 = 0;
+static uint64_t recv_size = 0;
+static uint64_t recv_size_0 = 0;
+static uint64_t recv_size_1 = 0;
 
 struct conn_io {
     uv_timer_t timer;
@@ -185,11 +190,11 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
     uint64_t t1 = *(uint64_t *)read_time;
     uint64_t t2 = getCurrentTime_mic();
     one_way_delay = t2 - t1;
-    fprintf(stderr, "first_path t1: %" PRIu64 "\n", t1);
-    fprintf(stderr, "first_path t2: %" PRIu64 "\n", t2);
+    fprintf(stderr, "path %d t1: %" PRIu64 "\n", path, t1);
+    fprintf(stderr, "path %d t2: %" PRIu64 "\n", path, t2);
     fprintf(stderr,
-            "first_path: server to client -> UDP trans time: %" PRIu64 "\n",
-            t2 - t1);
+            "path %d: server to client -> UDP trans time: %" PRIu64 "\n",
+            path, t2 - t1);
     for (int i = TIME_SIZE, j = 0; j < nread; i++, j++) {
         buf_on_read[j] = buf_with_time->base[i];
     }
@@ -200,8 +205,8 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
     uint64_t quiche_conn_recv_begin_time = getCurrentTime_mic();
     ssize_t done = quiche_conn_recv(conn_io->conn, buf_on_read, nread, path);
     uint64_t quiche_conn_recv_end_time = getCurrentTime_mic();
-    fprintf(stderr, "First path: quiche_conn_recv time: %" PRIu64 "\n",
-            quiche_conn_recv_end_time - quiche_conn_recv_begin_time);
+    fprintf(stderr, "path %d: quiche_conn_recv time: %" PRIu64 "\n",
+            path, quiche_conn_recv_end_time - quiche_conn_recv_begin_time);
 
     if (done == QUICHE_ERR_DONE) {
         fprintf(stderr, "done reading\n");
@@ -231,7 +236,7 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
                                                        sizeof(buf_on_read), &fin);
             uint64_t quiche_conn_stream_recv_end_time = getCurrentTime_mic();
             fprintf(stderr,
-                    "First path: quiche_conn_stream_recv time: %" PRIu64 "\n",
+                    "path %d: quiche_conn_stream_recv time: %" PRIu64 "\n", path,
                     quiche_conn_stream_recv_end_time -
                         quiche_conn_stream_recv_begin_time);
 
@@ -240,6 +245,12 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
                 break;
             } else {
                 fprintf(stderr, "Stream recv %zd bytes\n", recv_len);
+                recv_size += recv_len;
+                if (path) {
+                    recv_size_1 += recv_len;
+                } else {
+                    recv_size_0 += recv_len;
+                }
             }
 
             if (fin) {
@@ -247,19 +258,24 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
                 int64_t temp_time = quiche_conn_get_bct(conn_io->conn, s);
                 uint64_t quiche_conn_get_bct_end_time = getCurrentTime_mic();
                 fprintf(stderr,
-                        "First path: quiche_conn_get_bct time: %" PRIu64 "\n",
+                        "path %d: quiche_conn_get_bct time: %" PRIu64 "\n", path,
                         quiche_conn_get_bct_end_time -
                             quiche_conn_get_bct_begin_time);
 
                 fprintf(stderr,
                         "Statistics:stream:%" PRIu64
-                        " Received completely by path1, "
+                        " Received completely by path %d, "
                         "recv time is %" PRIu64 ", complete time is %" PRId64
                         "\n",
-                        s, getCurrentTime_mic(), temp_time);
+                        s, path, getCurrentTime_mic(), temp_time);
                 fprintf(stderr, "recv_cb ID:%" PRIu64 "\n", s);
                 fprintf(stderr, " %" PRId64 "\n", temp_time);
                 recv_num += 1;
+                if (path) {
+                    recv_num_1 += 1;
+                } else {
+                    recv_num_0 += 1;
+                }
                 fprintf(stderr, "recv_num:%" PRIu64 "\n", recv_num);
                 if (temp_time <= 200) {
                     chunk_before_deadline += 1;
@@ -306,9 +322,9 @@ static void timeout_cb(uv_timer_t *timer) {
         fprintf(stderr,
                 "connection closed, recv=%zu sent=%zu lost_init=%zu "
                 "lost_subseq=%zu rtt_init=%" PRIu64 "ns rtt_subseq=%" PRIu64
-                "ns\n",
+                "ns recv total %zu 0 %zu 1 %zu size total %zu 0 %zu 1 %zu\n",
                 stats.recv, stats.sent, stats.lost_init, stats.lost_subseq,
-                stats.rtt_init, stats.rtt_subseq);
+                stats.rtt_init, stats.rtt_subseq, recv_num, recv_num_0, recv_num_1, recv_size, recv_size_0, recv_size_1);
 
         uv_timer_stop(timer);
         // TODO stop all callback.
