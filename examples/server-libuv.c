@@ -195,7 +195,7 @@ int flush_packets_pacing(struct conn_io *conn_io, int path) {
     }
 
     int t = quiche_conn_timeout_as_nanos(conn_io->conn) / 1e6f;
-    fprintf(stderr, "ts: %d", t);
+    fprintf(stderr, "ts: %d\n", t);
     uv_timer_set_repeat(&conn_io->timer, t);
     uv_timer_again(&conn_io->timer);
 
@@ -272,6 +272,8 @@ static void sender_cb(uv_timer_t *sender_timer) {
         priority = conn_io->conns->configs[conn_io->send_round].priority;
         block_size = conn_io->conns->configs[conn_io->send_round].block_size;
         if (block_size > MAX_BLOCK_SIZE) block_size = MAX_BLOCK_SIZE;
+
+        fprintf(stderr, "ddl %d prio %d blk %d\n", deadline, priority, block_size);
 
         ssize_t stream_send_written = quiche_conn_stream_send_full(
             conn_io->conn, 4 * (conn_io->send_round + 1) + 1, buf, block_size,
@@ -569,8 +571,10 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
             stats.rtt_init, stats.rtt_subseq);
     flush_packets_pacing(conn_io, path);
 
+    fprintf(stderr, "find and delete closed\n");
     HASH_ITER(hh, conns->h, conn_io, tmp) {
         if (quiche_conn_is_closed(conn_io->conn)) {
+            fprintf(stderr, "conn_is_closed *****\n");
             HASH_DELETE(hh, conns->h, conn_io);
 
             uv_timer_stop(&conn_io->timer);
@@ -582,6 +586,7 @@ static void on_read(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf_with_time,
 }
 
 static void timeout_cb(uv_timer_t *timer) {
+    fprintf(stderr, "-----timeout_cb-----\n");
     struct conn_io *conn_io = timer->data;
     quiche_conn_on_timeout(conn_io->conn);
 
