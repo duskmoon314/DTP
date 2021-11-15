@@ -44,7 +44,7 @@ pub const MAX_DEADLINE: u64 = 9999999;
 pub const DEFAULT_PRIORITY: u64 = 2;
 
 // pub const MIN_ARRIVAL: f64 = 0.0;
-const MAXNUM_PRIORITY_QUEUE: usize = 3; //Num of priority queues
+const MAXNUM_PRIORITY_QUEUE: usize = 3; // Num of priority queues
 
 const MAX_SEND_TIME: f64 = 1000000.0;
 /// Blocks are all assigned or will miss deadline.
@@ -213,52 +213,51 @@ impl StreamMap {
                     ),
 
                     // Remotely-initiated unidirectional stream.
-                    (false, false) => {
-                        (local_params.initial_max_stream_data_uni, 0)
-                    }
+                    (false, false) =>
+                        (local_params.initial_max_stream_data_uni, 0),
                 };
 
                 // Enforce stream count limits.
                 match (is_local(id, is_server), is_bidi(id)) {
                     (true, true) => {
-                        if self.local_opened_streams_bidi
-                            >= self.peer_max_streams_bidi
+                        if self.local_opened_streams_bidi >=
+                            self.peer_max_streams_bidi
                         {
                             return Err(Error::StreamLimit);
                         }
 
                         self.local_opened_streams_bidi += 1;
-                    }
+                    },
 
                     (true, false) => {
-                        if self.local_opened_streams_uni
-                            >= self.peer_max_streams_uni
+                        if self.local_opened_streams_uni >=
+                            self.peer_max_streams_uni
                         {
                             return Err(Error::StreamLimit);
                         }
 
                         self.local_opened_streams_uni += 1;
-                    }
+                    },
 
                     (false, true) => {
-                        if self.peer_opened_streams_bidi
-                            >= self.local_max_streams_bidi
+                        if self.peer_opened_streams_bidi >=
+                            self.local_max_streams_bidi
                         {
                             return Err(Error::StreamLimit);
                         }
 
                         self.peer_opened_streams_bidi += 1;
-                    }
+                    },
 
                     (false, false) => {
-                        if self.peer_opened_streams_uni
-                            >= self.local_max_streams_uni
+                        if self.peer_opened_streams_uni >=
+                            self.local_max_streams_uni
                         {
                             return Err(Error::StreamLimit);
                         }
 
                         self.peer_opened_streams_uni += 1;
-                    }
+                    },
                 };
 
                 let s = Stream::new_full(
@@ -270,7 +269,7 @@ impl StreamMap {
                     priority,
                 );
                 v.insert(s)
-            }
+            },
 
             hash_map::Entry::Occupied(v) => v.into_mut(),
         };
@@ -522,17 +521,17 @@ impl StreamMap {
     /// Returns true if the max bidirectional streams count needs to be updated
     /// by sending a MAX_STREAMS frame to the peer.
     pub fn should_update_max_streams_bidi(&self) -> bool {
-        self.local_max_streams_bidi_next != self.local_max_streams_bidi
-            && self.local_max_streams_bidi_next / 2
-                > self.local_max_streams_bidi - self.peer_opened_streams_bidi
+        self.local_max_streams_bidi_next != self.local_max_streams_bidi &&
+            self.local_max_streams_bidi_next / 2 >
+                self.local_max_streams_bidi - self.peer_opened_streams_bidi
     }
 
     /// Returns true if the max unidirectional streams count needs to be updated
     /// by sending a MAX_STREAMS frame to the peer.
     pub fn should_update_max_streams_uni(&self) -> bool {
-        self.local_max_streams_uni_next != self.local_max_streams_uni
-            && self.local_max_streams_uni_next / 2
-                > self.local_max_streams_uni - self.peer_opened_streams_uni
+        self.local_max_streams_uni_next != self.local_max_streams_uni &&
+            self.local_max_streams_uni_next / 2 >
+                self.local_max_streams_uni - self.peer_opened_streams_uni
     }
 
     /// Returns the number of active streams in the map.
@@ -541,8 +540,8 @@ impl StreamMap {
         self.streams.len()
     }
 
-    // pub fn priority_queues_flushable(&self, strict_queue: usize) -> StreamIter {
-    //     StreamIter::from(&self.priority_queues[strict_queue])
+    // pub fn priority_queues_flushable(&self, strict_queue: usize) -> StreamIter
+    // {     StreamIter::from(&self.priority_queues[strict_queue])
     // }
 
     // MP: calculate send time and get max send time
@@ -564,7 +563,7 @@ impl StreamMap {
                     None => {
                         info!("get priority_queues none");
                         continue;
-                    }
+                    },
                 };
                 // let &id = self.priority_queues[strict_queue].get(i);
                 let stream = self.get_mut(id).unwrap();
@@ -599,8 +598,8 @@ impl StreamMap {
                 let m = owd_f + occupied_t_f;
                 let n = owd_s + occupied_t_s;
                 info!("m {} n {}", m, n);
-                let size_tmp = bandwidth_f * stream.send.len as f64 / 1000.0
-                    + (n - m) * bandwidth_f * bandwidth_s;
+                let size_tmp = bandwidth_f * stream.send.len as f64 / 1000.0 +
+                    (n - m) * bandwidth_f * bandwidth_s;
                 info!("size_tmp {}", size_tmp);
                 let mut size_first =
                     (size_tmp / (bandwidth_f + bandwidth_s)) as u64 * 1000;
@@ -611,8 +610,8 @@ impl StreamMap {
                 if size_first > stream.send.len {
                     size_first = stream.send.len;
                 }
-                let size_sec = stream.send.len - size_first; //bytes
-                let send_time_f = size_first as f64 / bandwidth_f / 1000.0; //ms
+                let size_sec = stream.send.len - size_first; // bytes
+                let send_time_f = size_first as f64 / bandwidth_f / 1000.0; // ms
                 let send_time_s = size_sec as f64 / bandwidth_s / 1000.0;
 
                 stream.send_time[0] = send_time_f;
@@ -626,7 +625,7 @@ impl StreamMap {
                     passed_time as f64 + occupied_t_s + send_time_s + owd_s;
                 let complete_t = complete_time_f.min(complete_time_s);
                 if complete_t > stream.send.deadline as f64 {
-                    //Under the current network condition, blocks will miss ddl
+                    // Under the current network condition, blocks will miss ddl
                     // stream.send_time[0] = MISS_DDL;
                     // stream.send_time[1] = MISS_DDL;
                     stream.predicted_missddl = true;
@@ -634,10 +633,10 @@ impl StreamMap {
                     continue;
                 }
 
-                if stream.send_time[0] + occupied_t_f
-                    > max_send_time_on_first_path
-                    && stream.send_time[1] + occupied_t_s
-                        > max_send_time_on_subseq_path
+                if stream.send_time[0] + occupied_t_f >
+                    max_send_time_on_first_path &&
+                    stream.send_time[1] + occupied_t_s >
+                        max_send_time_on_subseq_path
                 {
                     info!("max_send_time");
                     max_send_time_on_first_path =
@@ -659,11 +658,11 @@ impl StreamMap {
                                 self.priority_queues[strict_queue].remove(i);
                                 break;
                             }
-                        }
+                        },
                         None => {
                             info!("get priority_queues none");
                             continue;
-                        }
+                        },
                     };
                 }
             }
@@ -676,11 +675,11 @@ impl StreamMap {
                 match self.priority_queues[strict_queue].get(i) {
                     Some(v) => {
                         info!("id {}", *v);
-                    }
+                    },
                     None => {
                         info!("get priority_queues none");
                         continue;
-                    }
+                    },
                 };
             }
         }
@@ -691,6 +690,7 @@ impl StreamMap {
         info!("sendtimes: {}, {}", send_times[0], send_times[1]);
         Ok(send_times)
     }
+
     /// Choose the stream with min send time.
     /// If the streams are identical, choose the stream that came first.
     pub fn peek_flushable_mp(
@@ -702,9 +702,9 @@ impl StreamMap {
             bandwidth_f, bandwidth_s, owd_f, owd_s
         );
 
-        if self.priority_queues[0].is_empty()
-            && self.priority_queues[1].is_empty()
-            && self.priority_queues[2].is_empty()
+        if self.priority_queues[0].is_empty() &&
+            self.priority_queues[1].is_empty() &&
+            self.priority_queues[2].is_empty()
         {
             info!("Queues are empty.");
             return None;
@@ -740,7 +740,8 @@ impl StreamMap {
             let mut missddl_min_stream_id = NONE_BLOCK;
             let mut has_block_miss_ddl: bool = false;
 
-            // Whether there is a block that is not scheduled and can meet the deadline.
+            // Whether there is a block that is not scheduled and can meet the
+            // deadline.
             let mut blocks_unassigned_meetddl: bool = false;
             // Whether all blocks can wait for the next schedule.
             let mut all_blocks_can_wait: bool = true;
@@ -753,9 +754,10 @@ impl StreamMap {
                         None => {
                             info!("get priority_queues none 2");
                             continue;
-                        }
+                        },
                     }
-                    // let &id = self.priority_queues[strict_queue].get(i).unwrap();
+                    // let &id = self.priority_queues[strict_queue].get(i).
+                    // unwrap();
                     let stream = self.get(id).unwrap();
 
                     if stream.assigned == true {
@@ -778,16 +780,14 @@ impl StreamMap {
                         Err(_) => panic!("SystemTime before start time!"),
                     }
                     // The time this block can wait.
-                    let can_wait_time = stream.send.deadline as f64
-                        - passed as f64
-                        - stream.send_time[0]
-                        - owd_f;
+                    let can_wait_time = stream.send.deadline as f64 -
+                        passed as f64 -
+                        stream.send_time[0] -
+                        owd_f;
                     // The time this block send.
-                    let sendt = stream.send_time[0]
-                        .min(stream.send_time[1]);
+                    let sendt = stream.send_time[0].min(stream.send_time[1]);
                     // The time path being occupied.
-                    let smaller_send_time =
-                        send_times[0].min(send_times[1]);
+                    let smaller_send_time = send_times[0].min(send_times[1]);
 
                     if can_wait_time > smaller_send_time {
                         info!("stream: {} can wait in this turn", id);
@@ -818,9 +818,9 @@ impl StreamMap {
             }
             // All blocks in send buffer miss ddl.
             // Choose the block with min size and high priority.
-            if min_send_time == MAX_SEND_TIME
-                && can_wait_min_send_time == MAX_SEND_TIME
-                && has_block_miss_ddl
+            if min_send_time == MAX_SEND_TIME &&
+                can_wait_min_send_time == MAX_SEND_TIME &&
+                has_block_miss_ddl
             {
                 let mut min_size: u64 = 10000000;
                 for strict_queue in 0..MAXNUM_PRIORITY_QUEUE {
@@ -831,7 +831,7 @@ impl StreamMap {
                             None => {
                                 info!("get priority_queues none 2");
                                 continue;
-                            }
+                            },
                         }
 
                         let stream = self.get(id).unwrap();
@@ -854,7 +854,7 @@ impl StreamMap {
             info!("In peek_flushable_mp, stream id: {}", min_stream_id);
             return Some(min_stream_id);
         }
-    }     
+    }
 }
 
 /// A QUIC stream.
@@ -884,7 +884,8 @@ pub struct Stream {
     /// Deal with the case of selecting a block for the idle road.
     pub assigned: bool,
 
-    /// The block is considered to miss ddl according to the predicted network condition.
+    /// The block is considered to miss ddl according to the predicted network
+    /// condition.
     pub predicted_missddl: bool,
 
     /// Be Preemptive.
@@ -916,8 +917,8 @@ impl Stream {
     //     let mut real_priority = 0.0;
     //     if remaining_time < 0.0 {
     //         // trace!("remaining_time={}", remaining_time);
-    //         remaining_time = remaining_time.abs().min(self.send.deadline as f64);
-    //         real_priority += 2.0; // REMAINING_TIME_REAL_PRIORITY;
+    //         remaining_time = remaining_time.abs().min(self.send.deadline as
+    // f64);         real_priority += 2.0; // REMAINING_TIME_REAL_PRIORITY;
     //     }
     //     let priority = self.send.priority.min(min_priority);
     //     real_priority += a * priority as f64 / min_priority as f64
@@ -973,9 +974,9 @@ impl Stream {
     /// Returns true if the stream has enough flow control capacity to be
     /// written to, and is not finished.
     pub fn is_writable(&self) -> bool {
-        !self.send.shutdown
-            && !self.send.is_fin()
-            && self.send.off < self.send.max_data
+        !self.send.shutdown &&
+            !self.send.is_fin() &&
+            self.send.off < self.send.max_data
     }
 
     /// Returns true if the stream has data to send and is allowed to send at
@@ -1317,9 +1318,9 @@ impl RecvBuf {
     pub fn almost_full(&self) -> bool {
         // Send MAX_STREAM_DATA when the new limit is at least double the
         // amount of data that can be received before blocking.
-        self.fin_off.is_none()
-            && self.max_data_next != self.max_data
-            && self.max_data_next / 2 > self.max_data - self.len
+        self.fin_off.is_none() &&
+            self.max_data_next != self.max_data &&
+            self.max_data_next / 2 > self.max_data - self.len
     }
 
     /// Returns true if the receive-side of the stream is complete.
@@ -1577,10 +1578,10 @@ impl SendBuf {
         let mut out_len = max_data;
         let mut out_off = self.data.peek().map_or_else(|| out.off, RangeBuf::off);
 
-        while out_len > 0
-            && self.ready()
-            && self.off() == out_off
-            && self.off() < self.max_data
+        while out_len > 0 &&
+            self.ready() &&
+            self.off() == out_off &&
+            self.off() < self.max_data
         {
             let mut buf = match self.data.pop() {
                 Some(v) => v,

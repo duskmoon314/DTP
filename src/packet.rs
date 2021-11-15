@@ -28,8 +28,11 @@ use std::time;
 
 use ring::aead;
 
-use crate::{Error, PATH_NUM};
 use crate::Result;
+use crate::{
+    Error,
+    PATH_NUM,
+};
 
 use crate::crypto;
 use crate::octets;
@@ -229,7 +232,7 @@ impl Header {
         match ty {
             Type::Initial => {
                 token = Some(b.get_bytes_with_varint_length()?.to_vec());
-            }
+            },
 
             Type::Retry => {
                 // Exclude the integrity tag from the token.
@@ -239,7 +242,7 @@ impl Header {
 
                 let token_len = b.cap() - aead::AES_128_GCM.tag_len();
                 token = Some(b.get_bytes(token_len)?.to_vec());
-            }
+            },
 
             Type::VersionNegotiation => {
                 let mut list: Vec<u32> = Vec::new();
@@ -250,7 +253,7 @@ impl Header {
                 }
 
                 versions = Some(list);
-            }
+            },
 
             _ => (),
         };
@@ -323,19 +326,19 @@ impl Header {
                     Some(ref v) => {
                         out.put_varint(v.len() as u64)?;
                         out.put_bytes(v)?;
-                    }
+                    },
 
                     // No token, so length = 0.
                     None => {
                         out.put_varint(0)?;
-                    }
+                    },
                 }
-            }
+            },
 
             Type::Retry => {
                 // Retry packets don't have a token length.
                 out.put_bytes(self.token.as_ref().unwrap())?;
-            }
+            },
 
             _ => (),
         }
@@ -694,7 +697,10 @@ impl PktNumSpace {
 
             recv_pkt_need_ack: ranges::RangeSet::default(),
 
-            path_need_ack_pkt: [ranges::RangeSet::default(), ranges::RangeSet::default()],
+            path_need_ack_pkt: [
+                ranges::RangeSet::default(),
+                ranges::RangeSet::default(),
+            ],
 
             // init hashmap
             pkts_sent_with_pathid: HashMap::new(),
@@ -792,8 +798,8 @@ impl PktNumWindow {
 
     fn upper(&self) -> u64 {
         self.lower
-            .saturating_add(std::mem::size_of::<u128>() as u64 * 8)
-            - 1
+            .saturating_add(std::mem::size_of::<u128>() as u64 * 8) -
+            1
     }
 }
 

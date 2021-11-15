@@ -123,8 +123,8 @@ impl cc::CongestionControl for Reno {
         if !self.in_congestion_recovery(time_sent) {
             self.congestion_recovery_start_time = Some(now);
 
-            self.congestion_window = (self.congestion_window as f64
-                * cc::LOSS_REDUCTION_FACTOR)
+            self.congestion_window = (self.congestion_window as f64 *
+                cc::LOSS_REDUCTION_FACTOR)
                 as usize;
             info!("cutting cwnd half");
             self.congestion_window =

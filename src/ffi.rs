@@ -292,7 +292,7 @@ pub extern fn quiche_header_info(
                 token.copy_from_slice(&tok);
 
                 *token_len = tok.len();
-            }
+            },
 
             None => *token_len = 0,
         }
@@ -766,7 +766,9 @@ pub extern fn quiche_conn_get_path_one_way_delay_update(
 }
 
 #[no_mangle]
-pub extern fn quiche_conn_get_pacing_rate(conn: &Connection, path: size_t) -> f64 {
+pub extern fn quiche_conn_get_pacing_rate(
+    conn: &Connection, path: size_t,
+) -> f64 {
     conn.get_pacing_rate(path)
 }
 

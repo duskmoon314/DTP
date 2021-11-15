@@ -13,7 +13,7 @@ impl Default for OneWayDelayPredMeas {
             initial_path_owd: 5 as f64,
             subseq_path_owd: 5 as f64,
             owd_diff_stdev: 0 as f64,
-            ewma_alpha: 0.25, //a default parameter value
+            ewma_alpha: 0.25, // a default parameter value
             owd_diffs: Vec::new(),
             owds_diffs_len: 20,
         }
@@ -64,14 +64,14 @@ impl OneWayDelayPredMeas {
     pub fn update_owd(&mut self, owd: f64, path: u8) {
         match path {
             0 => {
-                self.initial_path_owd = owd * self.ewma_alpha
-                    + self.initial_path_owd * (1.0 - self.ewma_alpha);
-            }
+                self.initial_path_owd = owd * self.ewma_alpha +
+                    self.initial_path_owd * (1.0 - self.ewma_alpha);
+            },
 
             1 => {
-                self.subseq_path_owd = owd * self.ewma_alpha
-                    + self.subseq_path_owd * (1.0 - self.ewma_alpha);
-            }
+                self.subseq_path_owd = owd * self.ewma_alpha +
+                    self.subseq_path_owd * (1.0 - self.ewma_alpha);
+            },
 
             _ => panic!("Path ID is wrong!"),
         }

@@ -188,8 +188,7 @@ impl Recovery {
         &mut self, ranges: &ranges::RangeSet, ack_delay: u64,
         epoch: packet::Epoch, handshake_completed: bool, now: Instant,
         trace_id: &str, pkt_num_space: &mut packet::PktNumSpace,
-        paths: &mut [path::Path; crate::PATH_NUM],
-        path: usize,
+        paths: &mut [path::Path; crate::PATH_NUM], path: usize,
     ) -> Result<()> {
         // let largest_acked = ranges.largest().unwrap();
 
@@ -211,8 +210,8 @@ impl Recovery {
         //         cmp::max(self.largest_acked_pkt[epoch], largest_acked);
         // }
 
-        // if let Some(pkt) = self.sent[epoch].get(&self.largest_acked_pkt[epoch]) {
-        //     if pkt.ack_eliciting {
+        // if let Some(pkt) = self.sent[epoch].get(&self.largest_acked_pkt[epoch])
+        // {     if pkt.ack_eliciting {
         //         let latest_rtt = now - pkt.time;
 
         //         let ack_delay = if epoch == packet::EPOCH_APPLICATION {
@@ -236,7 +235,8 @@ impl Recovery {
         let mut largest_acked_firstpath = 0;
         let mut largest_acked_subseqpath = 0;
 
-        // Record whether an ACK frame acknowledges the packets sent on a certain path.
+        // Record whether an ACK frame acknowledges the packets sent on a certain
+        // path.
         let mut ack_packet_on_firstpath: bool = false;
         let mut ack_packet_on_subseqpath: bool = false;
 
@@ -260,9 +260,9 @@ impl Recovery {
                 info!("none starts");
                 continue;
             }
-            // If the acked packet number is lower than the lowest unacked packet
-            // number it means that the packet is not newly acked, so return
-            // early.
+            // If the acked packet number is lower than the lowest unacked
+            // packet number it means that the packet is not newly
+            // acked, so return early.
             //
             // Since we process acked packets from largest to lowest, this means
             // that as soon as we see an already-acked packet number
@@ -542,7 +542,7 @@ impl Recovery {
                 info!("smoothed_rtt1 {:?}", self.smoothed_rtt);
 
                 self.rttvar = latest_rtt / 2;
-            }
+            },
 
             Some(srtt) => {
                 self.min_rtt = cmp::min(self.min_rtt, latest_rtt);
@@ -556,14 +556,14 @@ impl Recovery {
                     latest_rtt
                 };
 
-                self.rttvar = self.rttvar.mul_f64(3.0 / 4.0)
-                    + sub_abs(srtt, adjusted_rtt).mul_f64(1.0 / 4.0);
+                self.rttvar = self.rttvar.mul_f64(3.0 / 4.0) +
+                    sub_abs(srtt, adjusted_rtt).mul_f64(1.0 / 4.0);
 
                 self.smoothed_rtt = Some(
                     srtt.mul_f64(7.0 / 8.0) + adjusted_rtt.mul_f64(1.0 / 8.0),
                 );
                 info!("**smoothed_rtt:{:?}**", self.smoothed_rtt);
-            }
+            },
         }
     }
 
@@ -659,12 +659,14 @@ impl Recovery {
                 "unacked.time <= lost_send_time {}",
                 unacked.time <= lost_send_time
             );
-            if unacked.time <= lost_send_time
-                || (pkts_num_with_seq.contains_key(&largest_acked)
-                    && pkts_num_with_seq.contains_key(&unacked.pkt_num)
-                    && *(pkts_num_with_seq.get(&largest_acked).unwrap())
-                        >= (*(pkts_num_with_seq.get(&unacked.pkt_num).unwrap())
-                            + PACKET_THRESHOLD))
+            if unacked.time <= lost_send_time ||
+                (pkts_num_with_seq.contains_key(&largest_acked) &&
+                    pkts_num_with_seq.contains_key(&unacked.pkt_num) &&
+                    *(pkts_num_with_seq.get(&largest_acked).unwrap()) >=
+                        (*(pkts_num_with_seq
+                            .get(&unacked.pkt_num)
+                            .unwrap()) +
+                            PACKET_THRESHOLD))
             {
                 if unacked.in_flight {
                     trace!(
@@ -683,9 +685,8 @@ impl Recovery {
                 let loss_time = match self.loss_time[epoch] {
                     None => unacked.time + loss_delay,
 
-                    Some(loss_time) => {
-                        cmp::min(loss_time, unacked.time + loss_delay)
-                    }
+                    Some(loss_time) =>
+                        cmp::min(loss_time, unacked.time + loss_delay),
                 };
 
                 self.loss_time[epoch] = Some(loss_time);
@@ -783,11 +784,11 @@ impl std::fmt::Debug for Recovery {
                 } else {
                     write!(f, "timer=exp ")?;
                 }
-            }
+            },
 
             None => {
                 write!(f, "timer=none ")?;
-            }
+            },
         };
 
         write!(f, "latest_rtt={:?} ", self.latest_rtt)?;
