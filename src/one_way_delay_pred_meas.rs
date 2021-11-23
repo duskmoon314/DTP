@@ -52,6 +52,9 @@ impl OneWayDelayPredMeas {
     // }
 
     // OWD: ms
+    /// # get_owd_pred
+    ///
+    /// get one way delay of `path`
     pub fn get_owd_pred(&self, path: usize) -> f64 {
         match path {
             0 => self.initial_path_owd,

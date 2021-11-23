@@ -23,6 +23,8 @@ all: client server
 
 all-uv: server-libuv client-libuv
 
+all-ev: server-libev client-libev
+
 client: client.c $(INCLUDE_DIR)/quiche.h $(LIB_DIR)/libquiche.a
 	$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@ $(INCS) $(LIBS)
 
@@ -35,6 +37,12 @@ server-libuv: server-libuv.c $(INCLUDE_DIR)/quiche.h $(LIB_DIR)/libquiche.a
 server: server.c $(INCLUDE_DIR)/quiche.h $(LIB_DIR)/libquiche.a
 	$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@ $(INCS) $(LIBS)
 
+server-libev: server-libev.c $(INCLUDE_DIR)/quiche.h $(LIB_DIR)/libquiche.a
+	$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@ $(INCS) $(LIBS)
+
+client-libev: client-libev.c $(INCLUDE_DIR)/quiche.h $(LIB_DIR)/libquiche.a
+	$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@ $(INCS) $(LIBS)
+
 # http3-client: http3-client.c $(INCLUDE_DIR)/quiche.h $(LIB_DIR)/libquiche.a
 # 	$(CC) $(CFLAGS) $(LDFLAGS) $< -o $@ $(INCS) $(LIBS)
 
@@ -44,5 +52,7 @@ server: server.c $(INCLUDE_DIR)/quiche.h $(LIB_DIR)/libquiche.a
 $(LIB_DIR)/libquiche.a: $(shell find $(SOURCE_DIR) -type f -name '*.rs')
 	cd .. && cargo build --release --target-dir $(BUILD_DIR)
 
+quiche: $(LIB_DIR)/libquiche.a
+
 clean:
-	@$(RM) -rf client server client-libuv server-libuv build/
+	@$(RM) -rf client server client-libuv server-libuv client-libev server-libev build/

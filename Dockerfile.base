@@ -21,13 +21,15 @@ WORKDIR /DTP
 
 COPY benches ./benches
 COPY deps ./deps
-COPY examples ./examples
 COPY src ./src
 COPY include ./include
 COPY Cargo.toml .
 
+COPY examples/Makefile ./examples/Makefile
 WORKDIR /DTP/examples
 
-RUN make all && make all-uv
+RUN make quiche
+COPY examples/ .
+RUN make all && make all-uv && make all-ev
 WORKDIR /DTP/examples
 ENTRYPOINT [ "bash" ]

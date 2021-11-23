@@ -518,7 +518,7 @@ impl Recovery {
         if self.loss_probes.iter().any(|&x| x > 0) {
             return std::usize::MAX;
         }
-
+        info!("cwnd {} bif {}", self.cc.cwnd(), self.cc.bytes_in_flight());
         self.cc.cwnd().saturating_sub(self.cc.bytes_in_flight())
     }
 

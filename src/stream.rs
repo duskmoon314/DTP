@@ -293,8 +293,11 @@ impl StreamMap {
     pub fn push_flushable(&mut self, stream_id: u64, priority: u64) {
         self.flushable.push_back(stream_id);
         // Besides push in the flushable, push in the priority queues.
-        info!("push_flushable");
         self.priority_queues[priority as usize].push_back(stream_id);
+        info!(
+            "push_flushable id {} prio {} pq {:?}",
+            stream_id, priority, self.priority_queues
+        );
     }
 
     /// Removes and returns the first stream ID from the flushable streams
@@ -575,6 +578,7 @@ impl StreamMap {
                     Ok(n) => passed_time = n.as_millis(),
                     Err(_) => panic!("SystemTime before start time!"),
                 }
+                info!("passed_time {}", passed_time);
                 if passed_time as u64 > stream.send.deadline {
                     // cancel block
                     info!("passed_time > deadline");
@@ -629,21 +633,29 @@ impl StreamMap {
                     // stream.send_time[0] = MISS_DDL;
                     // stream.send_time[1] = MISS_DDL;
                     stream.predicted_missddl = true;
-                    info!("MISS DDL");
+                    info!(
+                        "{} WILL MISS DDL predict complete_t {}",
+                        id, complete_t
+                    );
                     continue;
                 }
 
-                if stream.send_time[0] + occupied_t_f >
-                    max_send_time_on_first_path &&
-                    stream.send_time[1] + occupied_t_s >
-                        max_send_time_on_subseq_path
-                {
-                    info!("max_send_time");
-                    max_send_time_on_first_path =
-                        stream.send_time[0] + occupied_t_f;
-                    max_send_time_on_subseq_path =
-                        stream.send_time[1] + occupied_t_s;
-                }
+                // if stream.send_time[0] + occupied_t_f >
+                //     max_send_time_on_first_path &&
+                //     stream.send_time[1] + occupied_t_s >
+                //         max_send_time_on_subseq_path
+                // {
+                //     info!("max_send_time");
+                //     max_send_time_on_first_path =
+                //         stream.send_time[0] + occupied_t_f;
+                //     max_send_time_on_subseq_path =
+                //         stream.send_time[1] + occupied_t_s;
+                // }
+
+                max_send_time_on_first_path = max_send_time_on_first_path
+                    .max(stream.send_time[0] + occupied_t_f);
+                max_send_time_on_subseq_path = max_send_time_on_subseq_path
+                    .max(stream.send_time[1] + occupied_t_s);
             }
         }
 
@@ -698,7 +710,7 @@ impl StreamMap {
         occupied_t_f: f64, occupied_t_s: f64,
     ) -> Option<u64> {
         info!(
-            "bw_f: {}, bw_s: {}, owd_f: {}, owd_s:{}",
+            "peek_flushable_mp bw_f: {}, bw_s: {}, owd_f: {}, owd_s:{}",
             bandwidth_f, bandwidth_s, owd_f, owd_s
         );
 
@@ -709,6 +721,7 @@ impl StreamMap {
             info!("Queues are empty.");
             return None;
         } else {
+            info!("priority_queues {:?}", self.priority_queues);
             let send_times;
             match self.get_max_send_time(
                 bandwidth_f,
@@ -848,6 +861,7 @@ impl StreamMap {
                         break;
                     }
                 }
+                info!("peek missddl_min_stream_id {}", missddl_min_stream_id);
                 return Some(missddl_min_stream_id);
             }
 

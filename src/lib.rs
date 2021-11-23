@@ -1696,7 +1696,8 @@ impl Connection {
             // ----ZUO begin
             // self.recovery.drop_unacked_data(packet::EPOCH_INITIAL);
             let test_drop_unacked_data = time::Instant::now();
-            for path in 0..(PATH_NUM - 1) {
+            // for path in 0..(PATH_NUM - 1) {
+            for path in 0..PATH_NUM {
                 self.paths[path]
                     .recovery
                     .drop_unacked_data(packet::EPOCH_INITIAL);
@@ -1755,7 +1756,8 @@ impl Connection {
 
             // ----ZUO begin
             // self.recovery.drop_unacked_data(packet::EPOCH_INITIAL);
-            for path in 0..(PATH_NUM - 1) {
+            // for path in 0..(PATH_NUM - 1) {
+            for path in 0..PATH_NUM {
                 self.paths[path]
                     .recovery
                     .drop_unacked_data(packet::EPOCH_INITIAL);
@@ -2004,7 +2006,8 @@ impl Connection {
         // }
 
         let test_ack_for = time::Instant::now();
-        for path in 0..(PATH_NUM - 1) {
+        // for path in 0..(PATH_NUM - 1) {
+        for path in 0..PATH_NUM {
             for acked in self.paths[path].recovery.acked[epoch].drain(..) {
                 match acked {
                     frame::Frame::ACK { ranges, .. } => {
@@ -2210,7 +2213,8 @@ impl Connection {
 
         // Zuo: Whether lost pkt exists. If a frame is lost, re-schedule.
         let mut lost_block = false;
-        for path in 0..(PATH_NUM - 1) {
+        // for path in 0..(PATH_NUM - 1) {
+        for path in 0..PATH_NUM {
             for lost in self.paths[path].recovery.lost[epoch].drain(..) {
                 match lost {
                     frame::Frame::Crypto { data } => {
@@ -2604,7 +2608,7 @@ impl Connection {
                 in_flight = true;
             }
         }
-        let test_type_short = time::Instant::now();
+        // let test_type_short = time::Instant::now();
         // info!(
         //     "test_type_short: {}",
         //     (test_type_short - test_teset_frame).as_micros() as u64
@@ -2625,14 +2629,18 @@ impl Connection {
 
             // ---ZUO begin
             // Get the larger of pto of two paths
-            let recovery_pto = match self.paths[0]
+            // let recovery_pto = match self.paths[0]
+            //     .recovery
+            //     .pto()
+            //     .checked_sub(self.paths[1].recovery.pto())
+            // {
+            //     Some(v) => v,
+            //     None => self.paths[1].recovery.pto(),
+            // };
+            let recovery_pto = self.paths[0]
                 .recovery
                 .pto()
-                .checked_sub(self.paths[1].recovery.pto())
-            {
-                Some(v) => v,
-                None => self.paths[1].recovery.pto(),
-            };
+                .max(self.paths[1].recovery.pto());
 
             // self.draining_timer = Some(now + (self.recovery.pto() * 3));
             self.draining_timer = Some(now + (recovery_pto * 3));
@@ -2656,14 +2664,18 @@ impl Connection {
                 frames.push(frame);
 
                 // ---ZUO begin
-                let recovery_pto = match self.paths[0]
+                // let recovery_pto = match self.paths[0]
+                //     .recovery
+                //     .pto()
+                //     .checked_sub(self.paths[1].recovery.pto())
+                // {
+                //     Some(v) => v,
+                //     None => self.paths[1].recovery.pto(),
+                // };
+                let recovery_pto = self.paths[0]
                     .recovery
                     .pto()
-                    .checked_sub(self.paths[1].recovery.pto())
-                {
-                    Some(v) => v,
-                    None => self.paths[1].recovery.pto(),
-                };
+                    .max(self.paths[1].recovery.pto());
 
                 // self.draining_timer = Some(now + (self.recovery.pto() * 3));
                 self.draining_timer = Some(now + (recovery_pto * 3));
@@ -3048,6 +3060,9 @@ impl Connection {
         Ok(written)
     }
 
+    /// # get_bandwidth
+    ///
+    /// get bandwidth of `path`
     fn get_bandwidth(&self, path: usize) -> f64 {
         let cwnd: f64;
         let rtt: f64;
@@ -3055,7 +3070,7 @@ impl Connection {
 
         // Below may not a correctly(nicely) estimate Bandwidth
         cwnd = self.paths[path].recovery.cc.cwnd() as f64;
-        rtt = self.paths[path].recovery.rtt().as_millis() as f64;
+        rtt = self.paths[path].recovery.rtt().as_micros() as f64 / 1000_f64;
         bytes_in_flight = self.paths[path].recovery.cc.bytes_in_flight() as f64;
 
         let bandwidth = cwnd / rtt / 1000.0; // kB/s or bytes/ms -> MB/s
@@ -3079,7 +3094,7 @@ impl Connection {
         let cwnd: f64;
         let rtt: f64;
         cwnd = self.paths[path].recovery.cc.cwnd() as f64; // bytes
-        rtt = self.paths[path].recovery.rtt().as_millis() as f64; // ms
+        rtt = self.paths[path].recovery.rtt().as_micros() as f64 / 1000_f64; // ms
         cwnd * 8.0 * 1024.0 / rtt // bits/s
                                   // 3000.0 * 8.0 * 1024.0
     }
@@ -3537,7 +3552,7 @@ impl Connection {
         }
 
         if let Some(timer) = self.paths[0].recovery.loss_detection_timer() {
-            info!("1. timer <= now {}", timer <= now);
+            info!("1. loss_detection_timer <= now {}", timer <= now);
             if timer <= now {
                 trace!("{} loss detection timeout expired1", self.trace_id);
 
@@ -3550,7 +3565,7 @@ impl Connection {
             }
         }
         if let Some(timer) = self.paths[1].recovery.loss_detection_timer() {
-            info!("2. timer <= now {}", timer <= now);
+            info!("2. loss_detection_timer <= now {}", timer <= now);
             if timer <= now {
                 trace!("{} loss detection timeout expired2", self.trace_id);
 
@@ -3844,7 +3859,7 @@ impl Connection {
                 ranges,
                 ack_delay,
             } => {
-                // info!("receive and process ack frame");
+                info!("receive and process ack frame");
                 let process_ack_frame_begin_time = time::Instant::now();
                 let scale = 2_u64
                     .pow(self.peer_transport_params.ack_delay_exponent as u32);
@@ -4130,14 +4145,18 @@ impl Connection {
 
             frame::Frame::ConnectionClose { .. } => {
                 // ---ZUO begin
-                let recovery_pto = match self.paths[0]
+                // let recovery_pto = match self.paths[0]
+                //     .recovery
+                //     .pto()
+                //     .checked_sub(self.paths[1].recovery.pto())
+                // {
+                //     Some(v) => v,
+                //     None => self.paths[1].recovery.pto(),
+                // };
+                let recovery_pto = self.paths[0]
                     .recovery
                     .pto()
-                    .checked_sub(self.paths[1].recovery.pto())
-                {
-                    Some(v) => v,
-                    None => self.paths[1].recovery.pto(),
-                };
+                    .max(self.paths[1].recovery.pto());
                 // self.draining_timer = Some(now + (self.recovery.pto() * 3));
                 self.draining_timer = Some(now + (recovery_pto * 3));
                 // ---ZUO end
@@ -4145,14 +4164,18 @@ impl Connection {
 
             frame::Frame::ApplicationClose { .. } => {
                 // ---ZUO begin
-                let recovery_pto = match self.paths[0]
+                // let recovery_pto = match self.paths[0]
+                //     .recovery
+                //     .pto()
+                //     .checked_sub(self.paths[1].recovery.pto())
+                // {
+                //     Some(v) => v,
+                //     None => self.paths[1].recovery.pto(),
+                // };
+                let recovery_pto = self.paths[0]
                     .recovery
                     .pto()
-                    .checked_sub(self.paths[1].recovery.pto())
-                {
-                    Some(v) => v,
-                    None => self.paths[1].recovery.pto(),
-                };
+                    .max(self.paths[1].recovery.pto());
                 // self.draining_timer = Some(now + (self.recovery.pto() * 3));
                 self.draining_timer = Some(now + (recovery_pto * 3));
                 // ---ZUO end
@@ -4240,14 +4263,18 @@ impl Connection {
         };
 
         let idle_timeout = time::Duration::from_millis(idle_timeout);
-        let recovery_pto = match self.paths[0]
+        // let recovery_pto = match self.paths[0]
+        //     .recovery
+        //     .pto()
+        //     .checked_sub(self.paths[1].recovery.pto())
+        // {
+        //     Some(v) => v,
+        //     None => self.paths[1].recovery.pto(),
+        // };
+        let recovery_pto = self.paths[0]
             .recovery
             .pto()
-            .checked_sub(self.paths[1].recovery.pto())
-        {
-            Some(v) => v,
-            None => self.paths[1].recovery.pto(),
-        };
+            .max(self.paths[1].recovery.pto());
         let idle_timeout = cmp::max(idle_timeout, 3 * recovery_pto);
 
         Some(idle_timeout)

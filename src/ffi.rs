@@ -249,6 +249,8 @@ pub extern fn quiche_header_info(
         Err(e) => return e.to_c() as c_int,
     };
 
+    info!("hdr {:?}", hdr);
+
     unsafe {
         *version = hdr.version;
 
@@ -719,19 +721,22 @@ pub extern fn mp_mapping_pcid_to_mcid(
     let pcid = unsafe { slice::from_raw_parts(pcid, pcid_len) };
 
     info!("print init_scid");
-    for i in 0..init_scid.len() {
-        info!("{:X}", init_scid[i]);
-    }
+    // for i in 0..init_scid.len() {
+    //     info!("{:X}", init_scid[i]);
+    // }
+    info!("{:X?}", init_scid);
     info!("--------");
     info!("print subseq_scid");
-    for i in 0..subseq_scid.len() {
-        info!("{:X}", subseq_scid[i]);
-    }
+    // for i in 0..subseq_scid.len() {
+    //     info!("{:X}", subseq_scid[i]);
+    // }
+    info!("{:X?}", subseq_scid);
     info!("--------");
     info!("print pcid");
-    for i in 0..pcid.len() {
-        info!("{:X}", pcid[i]);
-    }
+    // for i in 0..pcid.len() {
+    //     info!("{:X}", pcid[i]);
+    // }
+    info!("{:X?} {:?}", pcid, pcid_len);
     info!("--------");
 
     if pcid == init_scid || pcid == subseq_scid {

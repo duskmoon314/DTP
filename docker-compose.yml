@@ -12,6 +12,8 @@ services:
       - ROLE=server
     cap_add:
       - NET_ADMIN
+    volumes:
+      - "./server.log:/DTP/examples/server.log"
     networks:
       mp_net1:
         ipv4_address: 192.178.32.2
@@ -29,6 +31,9 @@ services:
       - ROLE=client
     cap_add:
       - NET_ADMIN
+    volumes:
+      - "./client.log:/DTP/examples/client.log"
+      - "./client.csv:/DTP/examples/client.csv"
     networks:
       mp_net1:
         ipv4_address: 192.178.32.3
