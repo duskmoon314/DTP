@@ -165,8 +165,9 @@ static void flush_packets(struct ev_loop *loop, struct conn_io *conn_io,
     static uint8_t out[MAX_DATAGRAM_SIZE];
 
     while (true) {
+        uint64_t deadline, priority;
         ssize_t written =
-            quiche_conn_send(conn_io->conn, out, sizeof(out), path);
+            quiche_conn_send(conn_io->conn, out, sizeof(out), path, &deadline, &priority);
 
         if (written > 0) {
             log_debug("quiche_conn_send written %zd bytes", written);

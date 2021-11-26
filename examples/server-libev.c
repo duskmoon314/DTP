@@ -257,18 +257,74 @@ static struct conn_io *create_conn(struct ev_loop *loop, uint8_t *odcid,
     return conn_io;
 }
 
+u_char tos(u_int ddl, u_int prio) {
+    u_char d, p;
+
+    // 0x64 100ms
+    // 0xC8 200ms
+    // 0x1F4 500ms
+    // 0x3E8 1m
+    // 0xEA60 1min
+    if (ddl < 0x64) {
+        d = 5;
+    } else if (ddl < 0xC8) {
+        d = 4;
+    } else if (ddl < 0x1F4) {
+        d = 3;
+    } else if (ddl < 0x3E8) {
+        d = 2;
+    } else if (ddl < 0xEA60) {
+        d = 1;
+    } else {
+        d = 0;
+    }
+
+    if (prio < 2) {
+        p = 5 - prio;
+    } else if (prio < 4) {
+        p = 3;
+    } else if (prio < 8) {
+        p = 2;
+    } else if (prio < 16) {
+        p = 1;
+    } else {
+        p = 0;
+    }
+
+    return (d > p) ? d : p;
+}
+
+void set_tos(int ai_family, int sock, int tos) {
+    switch (ai_family)
+    {
+        case AF_INET:
+            if (setsockopt(sock, IPPROTO_IP, IP_TOS, &tos, sizeof(int)) < 0)
+                fprintf(stderr, "Warning: Cannot set TOS!\n");
+            break;
+
+        case AF_INET6:
+            if (setsockopt(sock, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(int)) < 0)
+                fprintf(stderr, "Warning: Cannot set TOS!\n");
+            break;
+
+        default:
+            break;
+    }
+}
+
 /***** QUIC Utilities END *****/
 
 /***** libev callback START *****/
 
 static void send_packet(int sock, const struct sockaddr *addr,
-                        socklen_t addr_len, const void *buf, size_t size) {
+                        socklen_t addr_len, const void *buf, size_t size, int tos) {
     uint64_t t = getCurrentTime_mic();
     uint8_t *out_time = (uint8_t *)&t;
     uint8_t out_with_time[MAX_DATAGRAM_SIZE + TIME_SIZE];
     memcpy(out_with_time, out_time, TIME_SIZE);
     memcpy(out_with_time + TIME_SIZE, buf, size);
     size += TIME_SIZE;
+    set_tos(addr->sa_family, sock, tos);
     ssize_t sent = sendto(sock, out_with_time, size, 0, addr, addr_len);
     if (sent < 0) {
         log_error("sendto error: %s", strerror(errno));
@@ -310,15 +366,17 @@ static void flush_packets(struct ev_loop *loop, struct conn_io *conn_io,
             ev_timer_again(loop, &conn_io->pacers[path].pacer_timer);
             break;
         } else {
+            uint64_t deadline, priority;
             ssize_t written =
-                quiche_conn_send(conn_io->conn, out, sizeof(out), path);
+                quiche_conn_send(conn_io->conn, out, sizeof(out), path, &deadline, &priority);
 
             if (written > 0) {
                 log_debug("quiche_conn_send written %zd bytes", written);
+                int t = tos(deadline, priority) << 5;
                 send_packet(
                     conn_io->conns->socks[path],
                     (const struct sockaddr *)&conn_io->pacers[path].addr,
-                    conn_io->pacers[path].addr_len, out, written);
+                    conn_io->pacers[path].addr_len, out, written, t);
                 conn_io->pacers[path].can_send -= written;
             } else if (written < -1) {
                 log_error("failed to create packet on path %d written %zd",
@@ -499,7 +557,7 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
                     return;
                 }
                 send_packet(conns->socks[path], (struct sockaddr *)&peer_addr,
-                            peer_addr_len, out_process, written);
+                            peer_addr_len, out_process, written, 7);
                 return;
             }
 
@@ -518,7 +576,7 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
                     return;
                 }
                 send_packet(conns->socks[path], (struct sockaddr *)&peer_addr,
-                            peer_addr_len, out_process, written);
+                            peer_addr_len, out_process, written, 7);
                 return;
             }
 

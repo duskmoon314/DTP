@@ -2159,7 +2159,8 @@ impl Connection {
     /// # Ok::<(), quiche::Error>(())
     /// ```
     pub fn send(
-        &mut self, out: &mut [u8], schedule_path_id: usize,
+        &mut self, out: &mut [u8], schedule_path_id: usize, deadline: &mut u64,
+        priority: &mut u64,
     ) -> Result<usize> {
         // let test9 = time::Instant::now();
         let now = time::Instant::now();
@@ -2770,11 +2771,14 @@ impl Connection {
                     None => continue,
                 };
                 info!("stream {} is choosen", stream_id);
+                let (block_priority, block_deadline) =
+                    stream.send.get_block_info();
+                *priority = (*priority).min(block_priority);
+                *deadline = (*deadline).min(block_deadline);
 
                 if stream.send.is_new() {
                     // Create BlockInfo frame
-                    let (block_priority, block_deadline) =
-                        stream.send.get_block_info();
+
                     let frame = frame::Frame::BlockInfo {
                         stream_id,
                         block_size: stream.send.block_size() as u64,
@@ -4732,7 +4736,7 @@ pub mod testing {
         }
 
         pub fn handshake(&mut self, buf: &mut [u8]) -> Result<()> {
-            let mut len = self.client.send(buf, 0)?;
+            let mut len = self.client.send(buf, 0, &mut 0, &mut 0)?;
 
             while !self.client.is_established() && !self.server.is_established() {
                 len = recv_send(&mut self.server, buf, len)?;
@@ -4748,7 +4752,7 @@ pub mod testing {
             &mut self, buf: &mut [u8], path: usize,
         ) -> Result<()> {
             loop {
-                let len = match self.client.send(buf, 0) {
+                let len = match self.client.send(buf, 0, &mut 0, &mut 0) {
                     Ok(v) => v,
 
                     Err(Error::Done) => break,
@@ -4772,7 +4776,7 @@ pub mod testing {
             &mut self, buf: &mut [u8], path: usize,
         ) -> Result<()> {
             loop {
-                let len = match self.server.send(buf, 0) {
+                let len = match self.server.send(buf, 0, &mut 0, &mut 0) {
                     Ok(v) => v,
 
                     Err(Error::Done) => break,
@@ -4838,7 +4842,7 @@ pub mod testing {
         let mut off = 0;
 
         while off < buf.len() {
-            match conn.send(&mut buf[off..], 0) {
+            match conn.send(&mut buf[off..], 0, &mut 0, &mut 0) {
                 Ok(write) => off += write,
 
                 Err(Error::Done) => break,

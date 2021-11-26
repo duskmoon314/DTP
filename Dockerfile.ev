@@ -1,0 +1,19 @@
+FROM duskmoon/dev-env:bullseye-go1.17.3-rust1.56.1-proxy
+
+RUN apt update;\ 
+    apt install -y --no-install-recommends\
+    libev-dev build-essential cmake iproute2 git;\
+    rm -rf /var/lib/apt/lists/*;
+
+WORKDIR /DTP
+
+COPY benches ./benches
+COPY deps ./deps
+COPY src ./src
+COPY include ./include
+COPY Cargo.toml .
+COPY examples ./examples
+
+WORKDIR /DTP/examples
+
+ENTRYPOINT [ "bash" ]

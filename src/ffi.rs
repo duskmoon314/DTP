@@ -425,14 +425,17 @@ pub extern fn quiche_conn_recv(
 #[no_mangle]
 pub extern fn quiche_conn_send(
     conn: &mut Connection, out: *mut u8, out_len: size_t, path: size_t,
+    deadline: &mut u64, priority: &mut u64,
 ) -> ssize_t {
     if out_len > <ssize_t>::max_value() as usize {
         panic!("The provided buffer is too large");
     }
 
     let out = unsafe { slice::from_raw_parts_mut(out, out_len) };
+    *deadline = i32::MAX as u64;
+    *priority = i32::MAX as u64;
 
-    match conn.send(out, path) {
+    match conn.send(out, path, deadline, priority) {
         Ok(v) => v as ssize_t,
 
         Err(e) => e.to_c(),
