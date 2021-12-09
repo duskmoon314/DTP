@@ -160,15 +160,12 @@ static void sender_cb(struct ev_loop *loop, ev_timer *w, int revents);
 /***** Utilities START *****/
 
 // log helper macro, no need to use \n
-#define log(level, ...) \
-    do {                \
-        ;               \
+#define log(level, ...)                                    \
+    do {                                                   \
+        fprintf(args.log, "[%s] %s: ", (level), __func__); \
+        fprintf(args.log, __VA_ARGS__);                    \
+        fprintf(args.log, "\n");                           \
     } while (0)
-// do {
-//     fprintf(args.log, "[%s] %s: ", (level), __func__);
-//     fprintf(args.log, __VA_ARGS__);
-//     fprintf(args.log, "\n");
-// } while (0)
 
 #define log_debug(...) log("DEBUG", __VA_ARGS__)
 
@@ -493,8 +490,8 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
 
         // get trans time
         memcpy(read_time, buf_with_time, TIME_SIZE);
-        // uint64_t t1 = *(uint64_t *)read_time;
-        // uint64_t t2 = getCurrentTime_mic();
+        uint64_t t1 = *(uint64_t *)read_time;
+        uint64_t t2 = getCurrentTime_mic();
         log_debug("send: %lu recv: %lu\nclient to server trans time: %lu", t1,
                   t2, t2 - t1);
 
@@ -704,47 +701,49 @@ static void sender_cb(struct ev_loop *loop, ev_timer *w, int revents) {
         int deadline = 0;
         int priority = 0;
         int block_size = 0;
-        float send_time_gap = 0.0;
+        static float send_time = 0.0;
         static uint8_t buf[MAX_BLOCK_SIZE];
 
         while (conn_io->send_round < conn_io->conns->configs_len) {
-            send_time_gap =
-                conn_io->conns->configs[conn_io->send_round].send_time_gap;
-            deadline = conn_io->conns->configs[conn_io->send_round].deadline;
-            priority = conn_io->conns->configs[conn_io->send_round].priority;
-            block_size =
-                conn_io->conns->configs[conn_io->send_round].block_size;
-            uint64_t stream_id = 4 * (conn_io->send_round + 1) + 801;
+            if (send_time + 0.005 >
+                conn_io->conns->configs[conn_io->send_round].send_time) {
+                deadline =
+                    conn_io->conns->configs[conn_io->send_round].deadline;
+                priority =
+                    conn_io->conns->configs[conn_io->send_round].priority;
+                block_size =
+                    conn_io->conns->configs[conn_io->send_round].block_size;
+                uint64_t stream_id = 4 * (conn_io->send_round + 1) + 801;
 
-            if (block_size > MAX_BLOCK_SIZE) {
-                block_size = MAX_BLOCK_SIZE;
-            }
+                if (block_size > MAX_BLOCK_SIZE) {
+                    block_size = MAX_BLOCK_SIZE;
+                }
 
-            log_debug("stream_id %lu ddl %d prio %d blk %d", stream_id,
-                      deadline, priority, block_size);
+                log_debug("stream_id %lu ddl %d prio %d blk %d", stream_id,
+                          deadline, priority, block_size);
 
-            ssize_t stream_send_written = quiche_conn_stream_send_full(
-                conn_io->conn, stream_id, buf, block_size, true, deadline,
-                priority);
-            if (stream_send_written < 0) {
-                log_error("failed to send data round %d", conn_io->send_round);
+                ssize_t stream_send_written = quiche_conn_stream_send_full(
+                    conn_io->conn, stream_id, buf, block_size, true, deadline,
+                    priority);
+                if (stream_send_written < 0) {
+                    log_error("failed to send data round %d",
+                              conn_io->send_round);
+                } else {
+                    log_debug("send round %d stream_send_written %zd",
+                              conn_io->send_round, stream_send_written);
+                }
+
+                conn_io->send_round++;
+                if (conn_io->send_round >= conn_io->conns->configs_len) {
+                    ev_timer_stop(loop, &conn_io->sender);
+                    break;
+                }
             } else {
-                log_debug("send round %d stream_send_written %zd",
-                          conn_io->send_round, stream_send_written);
-            }
-
-            conn_io->send_round++;
-            if (conn_io->send_round >= conn_io->conns->configs_len) {
-                ev_timer_stop(loop, &conn_io->sender);
-                break;
-            }
-
-            if (send_time_gap > 0.005) {
-                conn_io->sender.repeat = send_time_gap;
+                log_debug("send_time %f", send_time);
+                send_time += 0.005;
+                conn_io->sender.repeat = 0.005;
                 ev_timer_again(loop, &conn_io->sender);
                 break;
-            } else {
-                continue;
             }
         }
 

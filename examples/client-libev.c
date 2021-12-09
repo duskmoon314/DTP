@@ -113,16 +113,15 @@ static void flush_packets(struct ev_loop *loop, struct conn_io *conn_io,
 
 /***** Utilities START *****/
 
-#define log(level, ...) \
-    do {                \
-        ;               \
+#define log(level, ...)                                    \
+    do {                                                   \
+        fprintf(args.log, "[%s] %s: ", (level), __func__); \
+        fprintf(args.log, __VA_ARGS__);                    \
+        fprintf(args.log, "\n");                           \
     } while (0)
 // do {
-//     fprintf(args.log, "[%s] %s: ", (level), __func__);
-//     fprintf(args.log, __VA_ARGS__);
-//     fprintf(args.log, "\n");
+//     ;
 // } while (0)
-
 #define log_debug(...) log("DEBUG", __VA_ARGS__)
 
 #define log_error(...) log("ERROR", __VA_ARGS__)
@@ -169,8 +168,8 @@ static void flush_packets(struct ev_loop *loop, struct conn_io *conn_io,
 
     while (true) {
         uint64_t deadline, priority;
-        ssize_t written =
-            quiche_conn_send(conn_io->conn, out, sizeof(out), path, &deadline, &priority);
+        ssize_t written = quiche_conn_send(conn_io->conn, out, sizeof(out),
+                                           path, &deadline, &priority);
 
         if (written > 0) {
             log_debug("quiche_conn_send written %zd bytes", written);
@@ -235,8 +234,8 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
 
         // get trans time
         memcpy(read_time, buf_with_time, TIME_SIZE);
-        // uint64_t t1 = *(uint64_t *)read_time;
-        // uint64_t t2 = getCurrentTime_mic();
+        uint64_t t1 = *(uint64_t *)read_time;
+        uint64_t t2 = getCurrentTime_mic();
         log_debug("send: %lu recv: %lu\nserver to client trans time: %lu", t1,
                   t2, t2 - t1);
 
@@ -320,11 +319,11 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
         quiche_stats stats;
         quiche_conn_stats(conn_io->conn, &stats);
         fprintf(stderr,
-            "recv=%zu sent=%zu lost_init=%zu "
-            "lost_subseq=%zu rtt_init=%" PRIu64 "ns rtt_subseq=%" PRIu64
-            "ns recv_num %ld end-start time %luus",
-            stats.recv, stats.sent, stats.lost_init, stats.lost_subseq,
-            stats.rtt_init, stats.rtt_subseq, recv_num, t_end - t_start);
+                "recv=%zu sent=%zu lost_init=%zu "
+                "lost_subseq=%zu rtt_init=%" PRIu64 "ns rtt_subseq=%" PRIu64
+                "ns recv_num %ld end-start time %luus",
+                stats.recv, stats.sent, stats.lost_init, stats.lost_subseq,
+                stats.rtt_init, stats.rtt_subseq, recv_num, t_end - t_start);
 
         ev_break(loop, EVBREAK_ONE);
         return;
@@ -358,11 +357,11 @@ static void timeout_cb(struct ev_loop *loop, ev_timer *w, int revents) {
 
         quiche_conn_stats(conn_io->conn, &stats);
         fprintf(stderr,
-            "recv=%zu sent=%zu lost_init=%zu "
-            "lost_subseq=%zu rtt_init=%" PRIu64 "ns rtt_subseq=%" PRIu64
-            "ns recv_num %ld end-start time %luus",
-            stats.recv, stats.sent, stats.lost_init, stats.lost_subseq,
-            stats.rtt_init, stats.rtt_subseq, recv_num, t_end - t_start);
+                "recv=%zu sent=%zu lost_init=%zu "
+                "lost_subseq=%zu rtt_init=%" PRIu64 "ns rtt_subseq=%" PRIu64
+                "ns recv_num %ld end-start time %luus",
+                stats.recv, stats.sent, stats.lost_init, stats.lost_subseq,
+                stats.rtt_init, stats.rtt_subseq, recv_num, t_end - t_start);
 
         ev_break(loop, EVBREAK_ONE);
     }
