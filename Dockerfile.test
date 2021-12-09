@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+FROM simonkorl0228/aitrans_build:buster AS chef
+# dependencies
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+RUN --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt \
+    echo "[source.crates-io]\n\
+    replace-with = 'tuna'\n\n\
+    [source.tuna]\n\
+    registry = \"https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git\"" > $CARGO_HOME/config && \
+    apt-get update && apt-get install --no-install-recommends -y uthash-dev
+RUN --mount=type=cache,target=/root/.cargo cargo install cargo-chef 
+WORKDIR /build
+# planner
+FROM chef AS planner
+COPY benches ./benches
+COPY deps ./deps
+COPY examples ./examples
+COPY src ./src
+COPY include ./include
+COPY Cargo.toml ./Cargo.toml
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+WORKDIR /build
+COPY --from=planner /build/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+# build app
+COPY benches ./benches
+COPY deps ./deps
+COPY examples ./examples
+COPY src ./src
+COPY include ./include
+COPY Cargo.toml ./Cargo.toml
+WORKDIR /build/examples
+RUN cd .. && cargo build --release --target-dir /build/examples/build
+RUN --mount=type=cache,target=/root/.cargo make all-ev
+
+FROM simonkorl0228/aitrans_image_base:buster
+COPY --from=builder \
+    /build/examples/server-libev /home/aitrans-server/bin/server
+COPY --from=builder \
+    /build/examples/client-libev /home/aitrans-server/client
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+RUN --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt \
+    apt update && apt install --no-install-recommends -y tcpdump vim
+WORKDIR /home/aitrans-server

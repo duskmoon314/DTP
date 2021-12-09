@@ -1,8 +1,8 @@
-version: "3"
+version: "2"
 
 services:
   server:
-    image: duskmoon/mpdtp_test:base
+    image: duskmoon/mpdtp_test:test
     # image: duskmoon/mpdtp_test:uv
     container_name: mpdtp_test_base_server
     hostname: server
@@ -13,15 +13,20 @@ services:
     cap_add:
       - NET_ADMIN
     volumes:
-      - "./server.log:/DTP/examples/server.log"
+      - "./server.log:/home/aitrans-server/server.log"
+      - "/home/hkp/dtp_test_scripts:/home/aitrans-server/test-trace"
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
     networks:
       mp_net1:
         ipv4_address: 192.178.32.2
+        ipv6_address: 2001:db9:1::32:2
       mp_net2:
         ipv4_address: 192.178.33.2
+        ipv6_address: 2001:db9:1::33:2
 
   client:
-    image: duskmoon/mpdtp_test:base
+    image: duskmoon/mpdtp_test:test
     # image: duskmoon/mpdtp_test:uv
     container_name: mpdtp_test_base_client
     hostname: client
@@ -32,47 +37,57 @@ services:
     cap_add:
       - NET_ADMIN
     volumes:
-      - "./client.log:/DTP/examples/client.log"
-      - "./client.csv:/DTP/examples/client.csv"
+      - "./client.log:/home/aitrans-server/client.log"
+      - "./client.csv:/home/aitrans-server/client.csv"
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
     networks:
       mp_net1:
         ipv4_address: 192.178.32.3
+        ipv6_address: 2001:db9:1::32:3
       mp_net2:
         ipv4_address: 192.178.33.3
+        ipv6_address: 2001:db9:1::33:3
       # mp_net3:
       #   ipv4_address: 192.178.34.3
 
-  router:
-    image: duskmoon/dev-env:alpine-3.14-tc
-    container_name: mpdtp_test_base_router
-    hostname: router
-    stdin_open: true
-    tty: true
-    environment:
-      - ROLE=router
-    cap_add:
-      - NET_ADMIN
-    networks:
-      mp_net1:
-        ipv4_address: 192.178.32.10
-      mp_net2:
-        ipv4_address: 192.178.33.10
-      mp_net3:
-        ipv4_address: 192.178.34.10
+  # router:
+  #   image: duskmoon/dev-env:alpine-3.14-tc
+  #   container_name: mpdtp_test_base_router
+  #   hostname: router
+  #   stdin_open: true
+  #   tty: true
+  #   environment:
+  #     - ROLE=router
+  #   cap_add:
+  #     - NET_ADMIN
+  #   sysctls:
+  #     - net.ipv6.conf.all.disable_ipv6=0
+  #   networks:
+  #     mp_net1:
+  #       ipv4_address: 192.178.32.10
+  #     mp_net2:
+  #       ipv4_address: 192.178.33.10
+  #     mp_net3:
+  #       ipv4_address: 192.178.34.10
 
 networks:
   mp_net1:
     driver: bridge
+    enable_ipv6: true
     ipam:
       config:
         - subnet: 192.178.32.0/24
+        - subnet: 2001:db9:1::32:0/112
   mp_net2:
     driver: bridge
+    enable_ipv6: true
     ipam:
       config:
         - subnet: 192.178.33.0/24
-  mp_net3:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 192.178.34.0/24
+        - subnet: 2001:db9:1::33:0/112
+  # mp_net3:
+  #   driver: bridge
+  #   ipam:
+  #     config:
+  #       - subnet: 192.178.34.0/24

@@ -432,11 +432,16 @@ pub extern fn quiche_conn_send(
     }
 
     let out = unsafe { slice::from_raw_parts_mut(out, out_len) };
-    *deadline = i32::MAX as u64;
-    *priority = i32::MAX as u64;
+    *deadline = u64::MAX;
+    *priority = u64::MAX;
 
     match conn.send(out, path, deadline, priority) {
-        Ok(v) => v as ssize_t,
+        Ok(v) => {
+            if *deadline == u64::MAX {
+                *deadline = 0;
+            }
+            v as ssize_t
+        },
 
         Err(e) => e.to_c(),
     }
@@ -470,7 +475,7 @@ pub extern fn quiche_conn_stream_send_full(
     fin: bool, deadline: u64, priority: u64,
 ) -> ssize_t {
     if buf_len > <ssize_t>::max_value() as usize {
-        panic!("The provided buffer is too large");
+        panic!("The provided buffer is too large {}", buf_len);
     }
 
     let buf = unsafe { slice::from_raw_parts(buf, buf_len) };

@@ -20,6 +20,23 @@
 
 /***** Argp configs START *****/
 
+// Set argp configs
+// Below configs will gen this help message
+//
+// ❯ ./server-libev --help
+// Usage: server-libev [OPTION...]
+//             SERVER_IP1 SERVER_PORT1 SERVER_IP2 SERVER_PORT2 DTP_CONFIG
+// libev mpdtp server
+//
+//   -l, --log=FILE             log file with debug and error info
+//   -o, --out=FILE             output file with received file info
+//   -?, --help                 Give this help list
+//       --usage                Give a short usage message
+//   -V, --version              Print program version
+//
+// Mandatory or optional arguments to long options are also mandatory or
+// optional for any corresponding short options.
+
 const char *argp_program_version = "server-libev 0.0.1";
 static char doc[] = "libev mpdtp server";
 static char args_doc[] =
@@ -72,13 +89,14 @@ static struct argp argp = {options, parse_opt, args_doc, doc};
 #define MAX_BLOCK_SIZE 10000000  // QUIC
 #define TIME_SIZE 8
 
-int MAX_SEND_TIMES;
+int MAX_SEND_TIMES = 1000;
 
 #define MAX_TOKEN_LEN                                        \
     sizeof("quiche") - 1 + sizeof(struct sockaddr_storage) + \
         QUICHE_MAX_CONN_ID_LEN
 
 struct connections {
+    // sock_id of two connections
     uint64_t socks[2];
 
     struct conn_io *h;
@@ -120,6 +138,7 @@ static struct connections *conns = NULL;
 // instead of only a string "Second".
 static struct conn_io *conn_io_outside = NULL;
 
+// Second path cid
 uint8_t server_pcid[LOCAL_CONN_ID_LEN];
 uint8_t client_pcid[LOCAL_CONN_ID_LEN];
 
@@ -140,12 +159,16 @@ static void sender_cb(struct ev_loop *loop, ev_timer *w, int revents);
 
 /***** Utilities START *****/
 
-#define log(level, ...)                                    \
-    do {                                                   \
-        fprintf(args.log, "[%s] %s: ", (level), __func__); \
-        fprintf(args.log, __VA_ARGS__);                    \
-        fprintf(args.log, "\n");                           \
+// log helper macro, no need to use \n
+#define log(level, ...) \
+    do {                \
+        ;               \
     } while (0)
+// do {
+//     fprintf(args.log, "[%s] %s: ", (level), __func__);
+//     fprintf(args.log, __VA_ARGS__);
+//     fprintf(args.log, "\n");
+// } while (0)
 
 #define log_debug(...) log("DEBUG", __VA_ARGS__)
 
@@ -153,6 +176,7 @@ static void sender_cb(struct ev_loop *loop, ev_timer *w, int revents);
 
 #define log_info(...) log("INFO ", __VA_ARGS__)
 
+// write what we cared into file
 #define dump_file(...)                  \
     do {                                \
         fprintf(args.out, __VA_ARGS__); \
@@ -166,6 +190,7 @@ static void quiche_debug_log(const char *line, void *argp) {
 
 /***** QUIC Utilities START *****/
 
+// copy addr cid into token
 static void mint_token(const uint8_t *dcid, size_t dcid_len,
                        struct sockaddr_storage *addr, socklen_t addr_len,
                        uint8_t *token, size_t *token_len) {
@@ -204,6 +229,7 @@ static bool validate_token(const uint8_t *token, size_t token_len,
     return true;
 }
 
+// create new connection with random generated cid
 static struct conn_io *create_conn(struct ev_loop *loop, uint8_t *odcid,
                                    size_t odcid_len) {
     struct conn_io *conn_io = malloc(sizeof(*conn_io));
@@ -257,6 +283,8 @@ static struct conn_io *create_conn(struct ev_loop *loop, uint8_t *odcid,
     return conn_io;
 }
 
+// generate tos via ddl and prio
+// the smaller, the greater
 u_char tos(u_int ddl, u_int prio) {
     u_char d, p;
 
@@ -265,7 +293,9 @@ u_char tos(u_int ddl, u_int prio) {
     // 0x1F4 500ms
     // 0x3E8 1m
     // 0xEA60 1min
-    if (ddl < 0x64) {
+    if (ddl == 0) {
+        d = 7;
+    } else if (ddl < 0x64) {
         d = 5;
     } else if (ddl < 0xC8) {
         d = 4;
@@ -294,17 +324,18 @@ u_char tos(u_int ddl, u_int prio) {
     return (d > p) ? d : p;
 }
 
+// set tos via setsockopt according to ai_family
 void set_tos(int ai_family, int sock, int tos) {
-    switch (ai_family)
-    {
+    switch (ai_family) {
         case AF_INET:
             if (setsockopt(sock, IPPROTO_IP, IP_TOS, &tos, sizeof(int)) < 0)
-                fprintf(stderr, "Warning: Cannot set TOS!\n");
+                log_error("Warning: Cannot set TOS!");
             break;
 
         case AF_INET6:
-            if (setsockopt(sock, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(int)) < 0)
-                fprintf(stderr, "Warning: Cannot set TOS!\n");
+            if (setsockopt(sock, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(int)) <
+                0)
+                log_error("Warning: Cannot set TOS!");
             break;
 
         default:
@@ -316,8 +347,11 @@ void set_tos(int ai_family, int sock, int tos) {
 
 /***** libev callback START *****/
 
+// send_packet on sock
+//
 static void send_packet(int sock, const struct sockaddr *addr,
-                        socklen_t addr_len, const void *buf, size_t size, int tos) {
+                        socklen_t addr_len, const void *buf, size_t size,
+                        int tos) {
     uint64_t t = getCurrentTime_mic();
     uint8_t *out_time = (uint8_t *)&t;
     uint8_t out_with_time[MAX_DATAGRAM_SIZE + TIME_SIZE];
@@ -367,8 +401,8 @@ static void flush_packets(struct ev_loop *loop, struct conn_io *conn_io,
             break;
         } else {
             uint64_t deadline, priority;
-            ssize_t written =
-                quiche_conn_send(conn_io->conn, out, sizeof(out), path, &deadline, &priority);
+            ssize_t written = quiche_conn_send(conn_io->conn, out, sizeof(out),
+                                               path, &deadline, &priority);
 
             if (written > 0) {
                 log_debug("quiche_conn_send written %zd bytes", written);
@@ -459,8 +493,8 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
 
         // get trans time
         memcpy(read_time, buf_with_time, TIME_SIZE);
-        uint64_t t1 = *(uint64_t *)read_time;
-        uint64_t t2 = getCurrentTime_mic();
+        // uint64_t t1 = *(uint64_t *)read_time;
+        // uint64_t t2 = getCurrentTime_mic();
         log_debug("send: %lu recv: %lu\nclient to server trans time: %lu", t1,
                   t2, t2 - t1);
 
@@ -489,7 +523,7 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
 
                 // after two paths built, blocks are sent.
                 // start sending immediately and repeat every 50ms
-                ev_timer_init(&conn_io_outside->sender, sender_cb, 0.1, 0.050);
+                ev_timer_init(&conn_io_outside->sender, sender_cb, 0.1, 0.001);
                 ev_timer_start(loop, &conn_io_outside->sender);
                 conn_io_outside->sender.data = conn_io_outside;
 
@@ -557,7 +591,7 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
                     return;
                 }
                 send_packet(conns->socks[path], (struct sockaddr *)&peer_addr,
-                            peer_addr_len, out_process, written, 7);
+                            peer_addr_len, out_process, written, 7 << 5);
                 return;
             }
 
@@ -576,7 +610,7 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
                     return;
                 }
                 send_packet(conns->socks[path], (struct sockaddr *)&peer_addr,
-                            peer_addr_len, out_process, written, 7);
+                            peer_addr_len, out_process, written, 7 << 5);
                 return;
             }
 
@@ -670,35 +704,78 @@ static void sender_cb(struct ev_loop *loop, ev_timer *w, int revents) {
         int deadline = 0;
         int priority = 0;
         int block_size = 0;
+        float send_time_gap = 0.0;
         static uint8_t buf[MAX_BLOCK_SIZE];
 
-        deadline = conn_io->conns->configs[conn_io->send_round].deadline;
-        priority = conn_io->conns->configs[conn_io->send_round].priority;
-        block_size = conn_io->conns->configs[conn_io->send_round].block_size;
+        while (conn_io->send_round < conn_io->conns->configs_len) {
+            send_time_gap =
+                conn_io->conns->configs[conn_io->send_round].send_time_gap;
+            deadline = conn_io->conns->configs[conn_io->send_round].deadline;
+            priority = conn_io->conns->configs[conn_io->send_round].priority;
+            block_size =
+                conn_io->conns->configs[conn_io->send_round].block_size;
+            uint64_t stream_id = 4 * (conn_io->send_round + 1) + 801;
 
-        if (block_size > MAX_BLOCK_SIZE) {
-            block_size = MAX_BLOCK_SIZE;
+            if (block_size > MAX_BLOCK_SIZE) {
+                block_size = MAX_BLOCK_SIZE;
+            }
+
+            log_debug("stream_id %lu ddl %d prio %d blk %d", stream_id,
+                      deadline, priority, block_size);
+
+            ssize_t stream_send_written = quiche_conn_stream_send_full(
+                conn_io->conn, stream_id, buf, block_size, true, deadline,
+                priority);
+            if (stream_send_written < 0) {
+                log_error("failed to send data round %d", conn_io->send_round);
+            } else {
+                log_debug("send round %d stream_send_written %zd",
+                          conn_io->send_round, stream_send_written);
+            }
+
+            conn_io->send_round++;
+            if (conn_io->send_round >= conn_io->conns->configs_len) {
+                ev_timer_stop(loop, &conn_io->sender);
+                break;
+            }
+
+            if (send_time_gap > 0.005) {
+                conn_io->sender.repeat = send_time_gap;
+                ev_timer_again(loop, &conn_io->sender);
+                break;
+            } else {
+                continue;
+            }
         }
 
-        uint64_t stream_id = 4 * (conn_io->send_round + 1) + 1;
+        // deadline = conn_io->conns->configs[conn_io->send_round].deadline;
+        // priority = conn_io->conns->configs[conn_io->send_round].priority;
+        // block_size = conn_io->conns->configs[conn_io->send_round].block_size;
 
-        log_debug("stream_id %lu ddl %d prio %d blk %d", stream_id, deadline,
-                  priority, block_size);
+        // if (block_size > MAX_BLOCK_SIZE) {
+        //     block_size = MAX_BLOCK_SIZE;
+        // }
 
-        ssize_t stream_send_written =
-            quiche_conn_stream_send_full(conn_io->conn, stream_id, buf,
-                                         block_size, true, deadline, priority);
-        if (stream_send_written < 0) {
-            log_error("failed to send data round %d", conn_io->send_round);
-        } else {
-            log_debug("send round %d stream_send_written %zd",
-                      conn_io->send_round, stream_send_written);
-        }
+        // uint64_t stream_id = 4 * (conn_io->send_round + 1) + 1;
 
-        conn_io->send_round++;
-        if (conn_io->send_round >= MAX_SEND_TIMES) {
-            ev_timer_stop(loop, &conn_io->sender);
-        }
+        // log_debug("stream_id %lu ddl %d prio %d blk %d", stream_id, deadline,
+        //           priority, block_size);
+
+        // ssize_t stream_send_written =
+        //     quiche_conn_stream_send_full(conn_io->conn, stream_id, buf,
+        //                                  block_size, true, deadline,
+        //                                  priority);
+        // if (stream_send_written < 0) {
+        //     log_error("failed to send data round %d", conn_io->send_round);
+        // } else {
+        //     log_debug("send round %d stream_send_written %zd",
+        //               conn_io->send_round, stream_send_written);
+        // }
+
+        // conn_io->send_round++;
+        // if (conn_io->send_round >= conn_io->conns->configs_len) {
+        //     ev_timer_stop(loop, &conn_io->sender);
+        // }
 
         log_debug("flush packets");
         if (conn_io->MP_conn_finished) {
@@ -784,7 +861,7 @@ int main(int argc, char *argv[]) {
 
     int cfgs_len;
     struct dtp_config *cfgs = NULL;
-    cfgs = parse_dtp_config(args.args[4], &cfgs_len, &MAX_SEND_TIMES);
+    cfgs = parse_dtp_config(args.args[4], &cfgs_len);
     if (cfgs == NULL) {
         log_error("No valid DTP configuration");
         close(c.socks[0]);
@@ -798,7 +875,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     c.configs = cfgs;
-    c.configs_len = cfgs_len;
+    c.configs_len = cfgs_len > MAX_SEND_TIMES ? MAX_SEND_TIMES : cfgs_len;
 
     conns = &c;
 
