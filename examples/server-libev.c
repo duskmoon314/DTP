@@ -89,7 +89,7 @@ static struct argp argp = {options, parse_opt, args_doc, doc};
 #define MAX_BLOCK_SIZE 10000000  // QUIC
 #define TIME_SIZE 8
 
-int MAX_SEND_TIMES = 1000;
+int MAX_SEND_TIMES = 10000;
 
 #define MAX_TOKEN_LEN                                        \
     sizeof("quiche") - 1 + sizeof(struct sockaddr_storage) + \
@@ -706,14 +706,14 @@ static void sender_cb(struct ev_loop *loop, ev_timer *w, int revents) {
 
         while (conn_io->send_round < conn_io->conns->configs_len) {
             if (send_time + 0.005 >
-                conn_io->conns->configs[conn_io->send_round].send_time) {
+                conn_io->conns->configs[conn_io->send_round].send_time_gap) {
                 deadline =
                     conn_io->conns->configs[conn_io->send_round].deadline;
                 priority =
                     conn_io->conns->configs[conn_io->send_round].priority;
                 block_size =
                     conn_io->conns->configs[conn_io->send_round].block_size;
-                uint64_t stream_id = 4 * (conn_io->send_round + 1) + 801;
+                uint64_t stream_id = 4 * (conn_io->send_round + 1) + 1;
 
                 if (block_size > MAX_BLOCK_SIZE) {
                     block_size = MAX_BLOCK_SIZE;
@@ -873,6 +873,12 @@ int main(int argc, char *argv[]) {
         close(c.socks[1]);
         return -1;
     }
+
+    for (size_t i = 1; i < cfgs_len; i++)
+    {
+        cfgs[i].send_time_gap += cfgs[i - 1].send_time_gap;
+    }
+
     c.configs = cfgs;
     c.configs_len = cfgs_len > MAX_SEND_TIMES ? MAX_SEND_TIMES : cfgs_len;
 
