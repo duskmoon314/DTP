@@ -556,8 +556,8 @@ impl Recovery {
                     latest_rtt
                 };
 
-                self.rttvar = self.rttvar.mul_f64(3.0 / 4.0) +
-                    sub_abs(srtt, adjusted_rtt).mul_f64(1.0 / 4.0);
+                self.rttvar = self.rttvar.mul_f64(3.0 / 4.0)
+                    + sub_abs(srtt, adjusted_rtt).mul_f64(1.0 / 4.0);
 
                 self.smoothed_rtt = Some(
                     srtt.mul_f64(7.0 / 8.0) + adjusted_rtt.mul_f64(1.0 / 8.0),
@@ -659,14 +659,12 @@ impl Recovery {
                 "unacked.time <= lost_send_time {}",
                 unacked.time <= lost_send_time
             );
-            if unacked.time <= lost_send_time ||
-                (pkts_num_with_seq.contains_key(&largest_acked) &&
-                    pkts_num_with_seq.contains_key(&unacked.pkt_num) &&
-                    *(pkts_num_with_seq.get(&largest_acked).unwrap()) >=
-                        (*(pkts_num_with_seq
-                            .get(&unacked.pkt_num)
-                            .unwrap()) +
-                            PACKET_THRESHOLD))
+            if unacked.time <= lost_send_time
+                || (pkts_num_with_seq.contains_key(&largest_acked)
+                    && pkts_num_with_seq.contains_key(&unacked.pkt_num)
+                    && *(pkts_num_with_seq.get(&largest_acked).unwrap())
+                        >= (*(pkts_num_with_seq.get(&unacked.pkt_num).unwrap())
+                            + PACKET_THRESHOLD))
             {
                 if unacked.in_flight {
                     trace!(
@@ -685,8 +683,9 @@ impl Recovery {
                 let loss_time = match self.loss_time[epoch] {
                     None => unacked.time + loss_delay,
 
-                    Some(loss_time) =>
-                        cmp::min(loss_time, unacked.time + loss_delay),
+                    Some(loss_time) => {
+                        cmp::min(loss_time, unacked.time + loss_delay)
+                    },
                 };
 
                 self.loss_time[epoch] = Some(loss_time);

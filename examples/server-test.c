@@ -1,6 +1,5 @@
 #include <argp.h>
 #include <arpa/inet.h>
-#include <dtp_config.h>
 #include <errno.h>
 #include <ev.h>
 #include <fcntl.h>
@@ -15,42 +14,29 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "dtp_config.h"
 #include "helper.h"
 #include "uthash.h"
 
-/***** Argp configs START *****/
+/***** Argp configs *****/
 
-// Set argp configs
-// Below configs will gen this help message
-//
-// ❯ ./server-libev --help
-// Usage: server-libev [OPTION...]
-//             SERVER_IP1 SERVER_PORT1 SERVER_IP2 SERVER_PORT2 DTP_CONFIG
-// libev mpdtp server
-//
-//   -l, --log=FILE             log file with debug and error info
-//   -o, --out=FILE             output file with received file info
-//   -?, --help                 Give this help list
-//       --usage                Give a short usage message
-//   -V, --version              Print program version
-//
-// Mandatory or optional arguments to long options are also mandatory or
-// optional for any corresponding short options.
-
-const char *argp_program_version = "server-libev 0.0.1";
-static char doc[] = "libev mpdtp server";
+const char *argp_program_version = "server-test 0.0.1";
+static char doc[] = "libev mpdtp server for test";
 static char args_doc[] =
     "SERVER_IP1 SERVER_PORT1 SERVER_IP2 SERVER_PORT2 DTP_CONFIG";
+#define ARGS_NUM 5
 
 static struct argp_option options[] = {
     {"log", 'l', "FILE", 0, "log file with debug and error info"},
     {"out", 'o', "FILE", 0, "output file with received file info"},
+    {"log-level", 'v', "LEVEL", 0, "log level ERROR 1 -> TRACE 5"},
+    {"color", 'c', 0, 0, "log with color"},
     {0}};
 
 struct arguments {
     FILE *log;
     FILE *out;
-    char *args[5];
+    char *args[ARGS_NUM];
 };
 
 static struct arguments args;
@@ -64,12 +50,18 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case 'o':
             arguments->out = fopen(arg, "w+");
             break;
+        case 'v':
+            LOG_LEVEL = arg ? atoi(arg) : 3;
+            break;
+        case 'c':
+            LOG_COLOR = 1;
+            break;
         case ARGP_KEY_ARG:
-            if (state->arg_num >= 5) argp_usage(state);
+            if (state->arg_num >= ARGS_NUM) argp_usage(state);
             arguments->args[state->arg_num] = arg;
             break;
         case ARGP_KEY_END:
-            if (state->arg_num < 5) argp_usage(state);
+            if (state->arg_num < ARGS_NUM) argp_usage(state);
             break;
 
         default:
@@ -85,9 +77,7 @@ static struct argp argp = {options, parse_opt, args_doc, doc};
 #define HELPER_LOG args.log
 #define HELPER_OUT args.out
 
-/***** Argp configs END *****/
-
-/***** DTP configs START *****/
+/***** DTP configs *****/
 
 #define LOCAL_CONN_ID_LEN 16
 #define MAX_DATAGRAM_SIZE 1350   // UDP
@@ -147,9 +137,7 @@ static struct conn_io *conn_io_outside = NULL;
 uint8_t server_pcid[LOCAL_CONN_ID_LEN];
 uint8_t client_pcid[LOCAL_CONN_ID_LEN];
 
-/***** DTP configs END *****/
-
-/***** libev callback declare START *****/
+/***** callback declaration *****/
 
 static void timeout_cb(struct ev_loop *loop, ev_timer *w, int revents);
 static void flush_packets(struct ev_loop *loop, struct conn_io *conn_io,
@@ -160,11 +148,8 @@ static void flush_packets_1(struct ev_loop *loop, ev_timer *pacer_timer,
                             int revents);
 static void sender_cb(struct ev_loop *loop, ev_timer *w, int revents);
 
-/***** libev callback declare START *****/
+/***** quic utilities *****/
 
-/***** QUIC Utilities START *****/
-
-// copy addr cid into token
 static void mint_token(const uint8_t *dcid, size_t dcid_len,
                        struct sockaddr_storage *addr, socklen_t addr_len,
                        uint8_t *token, size_t *token_len) {
@@ -203,7 +188,6 @@ static bool validate_token(const uint8_t *token, size_t token_len,
     return true;
 }
 
-// create new connection with random generated cid
 static struct conn_io *create_conn(struct ev_loop *loop, uint8_t *odcid,
                                    size_t odcid_len) {
     struct conn_io *conn_io = malloc(sizeof(*conn_io));
@@ -257,8 +241,6 @@ static struct conn_io *create_conn(struct ev_loop *loop, uint8_t *odcid,
     return conn_io;
 }
 
-// generate tos via ddl and prio
-// the smaller, the greater
 u_char tos(u_int ddl, u_int prio) {
     u_char d, p;
 
@@ -298,7 +280,6 @@ u_char tos(u_int ddl, u_int prio) {
     return (d > p) ? d : p;
 }
 
-// set tos via setsockopt according to ai_family
 void set_tos(int ai_family, int sock, int tos) {
     switch (ai_family) {
         case AF_INET:
@@ -319,23 +300,19 @@ void set_tos(int ai_family, int sock, int tos) {
     }
 }
 
-/***** QUIC Utilities END *****/
+/***** callback definition *****/
 
-/***** libev callback START *****/
-
-// send_packet on sock
-//
 static void send_packet(int sock, const struct sockaddr *addr,
                         socklen_t addr_len, const void *buf, size_t size,
                         int tos) {
-    uint64_t t = getCurrentTime_mic();
-    uint8_t *out_time = (uint8_t *)&t;
-    uint8_t out_with_time[MAX_DATAGRAM_SIZE + TIME_SIZE];
-    memcpy(out_with_time, out_time, TIME_SIZE);
-    memcpy(out_with_time + TIME_SIZE, buf, size);
-    size += TIME_SIZE;
+    // uint64_t t = getCurrentTime_mic();
+    // uint8_t *out_time = (uint8_t *)&t;
+    // uint8_t out_with_time[MAX_DATAGRAM_SIZE + TIME_SIZE];
+    // memcpy(out_with_time, out_time, TIME_SIZE);
+    // memcpy(out_with_time + TIME_SIZE, buf, size);
+    // size += TIME_SIZE;
     set_tos(addr->sa_family, sock, tos);
-    ssize_t sent = sendto(sock, out_with_time, size, 0, addr, addr_len);
+    ssize_t sent = sendto(sock, buf, size, 0, addr, addr_len);
     if (sent < 0) {
         log_error("sendto error: %s", strerror(errno));
         return;
@@ -428,8 +405,8 @@ static void flush_packets_1(struct ev_loop *loop, ev_timer *pacer_timer,
 
 static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
     struct conn_io *tmp, *conn_io = NULL;
-    static uint8_t buf_with_time[MAX_BLOCK_SIZE];
-    static uint8_t read_time[TIME_SIZE];
+    // static uint8_t buf_with_time[MAX_BLOCK_SIZE];
+    // static uint8_t read_time[TIME_SIZE];
     static uint8_t buf[MAX_BLOCK_SIZE];
     static uint8_t out_process[MAX_DATAGRAM_SIZE];
     static uint8_t first_pkt_of_second_path[] = "Second";
@@ -440,9 +417,8 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
         struct sockaddr_storage peer_addr;
         socklen_t peer_addr_len = sizeof(peer_addr);
 
-        ssize_t nread =
-            recvfrom(conns->socks[path], buf_with_time, sizeof(buf_with_time),
-                     0, (struct sockaddr *)&peer_addr, &peer_addr_len);
+        ssize_t nread = recvfrom(conns->socks[path], buf, sizeof(buf), 0,
+                                 (struct sockaddr *)&peer_addr, &peer_addr_len);
         if (nread == 0) {
             log_error("no message to read");
             return;
@@ -468,20 +444,21 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
         }
 
         // get trans time
-        memcpy(read_time, buf_with_time, TIME_SIZE);
-        uint64_t t1 = *(uint64_t *)read_time;
-        uint64_t t2 = getCurrentTime_mic();
-        log_debug("send: %lu recv: %lu\nclient to server trans time: %lu", t1,
-                  t2, t2 - t1);
+        // memcpy(read_time, buf_with_time, TIME_SIZE);
+        // uint64_t t1 = *(uint64_t *)read_time;
+        // uint64_t t2 = getCurrentTime_mic();
+        // log_debug("send: %lu recv: %lu\nclient to server trans time: %lu",
+        // t1,
+        //   t2, t2 - t1);
 
         // get one way delay
-        memcpy(read_time, buf_with_time + TIME_SIZE, TIME_SIZE);
-        uint64_t owd = *(uint64_t *)read_time;
-        log_debug("one way delay %lu", owd);
+        // memcpy(read_time, buf_with_time + TIME_SIZE, TIME_SIZE);
+        // uint64_t owd = *(uint64_t *)read_time;
+        // log_debug("one way delay %lu", owd);
 
         // copy to buf
-        nread -= 2 * TIME_SIZE;
-        memcpy(buf, (buf_with_time + 2 * TIME_SIZE), nread);
+        // nread -= 2 * TIME_SIZE;
+        // memcpy(buf, (buf_with_time + 2 * TIME_SIZE), nread);
 
         if (memcmp(buf, first_pkt_of_second_path,
                    sizeof(first_pkt_of_second_path)) == 0) {
@@ -619,8 +596,9 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
             return;
         }
 
-        quiche_conn_get_path_one_way_delay_update(conn_io->conn, owd / 1000.0,
-                                                  path);
+        // quiche_conn_get_path_one_way_delay_update(conn_io->conn, owd /
+        // 1000.0,
+        //   path);
 
         ssize_t done = quiche_conn_recv(conn_io->conn, buf, nread, path);
         if (done == QUICHE_ERR_DONE) {
@@ -786,8 +764,6 @@ static void timeout_cb(struct ev_loop *loop, ev_timer *w, int revents) {
     }
     return;
 }
-
-/***** libev callback END *****/
 
 int64_t init_udp_server(const char *addr, const char *port) {
     const struct addrinfo hints = {.ai_family = PF_UNSPEC,

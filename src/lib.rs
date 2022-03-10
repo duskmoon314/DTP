@@ -324,24 +324,24 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[repr(C)]
 pub enum Error {
     /// There is no more work to do.
-    Done               = -1,
+    Done = -1,
 
     /// The provided buffer is too short.
-    BufferTooShort     = -2,
+    BufferTooShort = -2,
 
     /// The provided packet cannot be parsed because its version is unknown.
-    UnknownVersion     = -3,
+    UnknownVersion = -3,
 
     /// The provided packet cannot be parsed because it contains an invalid
     /// frame.
-    InvalidFrame       = -4,
+    InvalidFrame = -4,
 
     /// The provided packet cannot be parsed.
-    InvalidPacket      = -5,
+    InvalidPacket = -5,
 
     /// The operation cannot be completed because the connection is in an
     /// invalid state.
-    InvalidState       = -6,
+    InvalidState = -6,
 
     /// The operation cannot be completed because the stream is in an
     /// invalid state.
@@ -351,22 +351,22 @@ pub enum Error {
     InvalidTransportParam = -8,
 
     /// A cryptographic operation failed.
-    CryptoFail         = -9,
+    CryptoFail = -9,
 
     /// The TLS handshake failed.
-    TlsFail            = -10,
+    TlsFail = -10,
 
     /// The peer violated the local flow control limits.
-    FlowControl        = -11,
+    FlowControl = -11,
 
     /// The peer violated the local stream limits.
-    StreamLimit        = -12,
+    StreamLimit = -12,
 
     /// The received data exceeds the stream's final size.
-    FinalSize          = -13,
+    FinalSize = -13,
 
     /// Error in congestion control.
-    CongestionControl  = -14,
+    CongestionControl = -14,
 }
 
 impl Error {
@@ -416,7 +416,7 @@ impl std::convert::From<octets::BufferTooShortError> for Error {
 #[repr(C)]
 pub enum Shutdown {
     /// Stop receiving stream data.
-    Read  = 0,
+    Read = 0,
 
     /// Stop sending stream data.
     Write = 1,
@@ -1016,9 +1016,9 @@ pub fn retry(
 /// Returns true if the given protocol version is supported.
 pub fn version_is_supported(version: u32) -> bool {
     match version {
-        PROTOCOL_VERSION |
-        PROTOCOL_VERSION_DRAFT24 |
-        PROTOCOL_VERSION_DRAFT23 => true,
+        PROTOCOL_VERSION
+        | PROTOCOL_VERSION_DRAFT24
+        | PROTOCOL_VERSION_DRAFT23 => true,
 
         _ => false,
     }
@@ -1206,9 +1206,9 @@ impl Connection {
         // If a frame is lost, re-schedule.
         // If new block comes, re-schedule.
         // Can change to the pkt-level schedule.
-        if self.network_varied(schedule_path_id) ||
-            lost_pkt ||
-            self.arrived_num < self.streams.len() as u64
+        if self.network_varied(schedule_path_id)
+            || lost_pkt
+            || self.arrived_num < self.streams.len() as u64
         {
             info!("lost pkt {}", lost_pkt);
             info!("new block");
@@ -1254,12 +1254,12 @@ impl Connection {
                     stream_to_send = Some(x.streamid);
                 } else {
                     // Pop the info which is sent over.
-                    while !self.send_info[schedule_path_id as usize].is_empty() &&
-                        self.send_info[schedule_path_id as usize]
+                    while !self.send_info[schedule_path_id as usize].is_empty()
+                        && self.send_info[schedule_path_id as usize]
                             .get(0)
                             .unwrap()
-                            .unsend_size <=
-                            0
+                            .unsend_size
+                            <= 0
                     {
                         info!("pop front send info");
                         self.send_info[schedule_path_id as usize].pop_front();
@@ -1323,9 +1323,9 @@ impl Connection {
 
         let sid = stream_to_send.unwrap();
 
-        if self.paths[schedule_path_id].last_block != 0 &&
-            sid != self.paths[schedule_path_id].last_block &&
-            self.paths[schedule_path_id].previous_unsend != 0
+        if self.paths[schedule_path_id].last_block != 0
+            && sid != self.paths[schedule_path_id].last_block
+            && self.paths[schedule_path_id].previous_unsend != 0
         {
             let last_stream = match self
                 .streams
@@ -1351,10 +1351,10 @@ impl Connection {
     }
 
     fn network_varied(&mut self, schedule_path_id: usize) -> bool {
-        if self.get_bandwidth(schedule_path_id) !=
-            self.paths[schedule_path_id].previous_bw ||
-            self.paths[schedule_path_id].recovery.rtt().as_millis() !=
-                self.paths[schedule_path_id].previous_rtt
+        if self.get_bandwidth(schedule_path_id)
+            != self.paths[schedule_path_id].previous_bw
+            || self.paths[schedule_path_id].recovery.rtt().as_millis()
+                != self.paths[schedule_path_id].previous_rtt
         {
             self.paths[schedule_path_id].previous_bw =
                 self.get_bandwidth(schedule_path_id);
@@ -1373,10 +1373,13 @@ impl Connection {
         info!("--------schedule_prio_mp-------");
         let mut block_to_send = true;
         // Calculate all streams send time and fill in two paths.
+        let stats = self.stats();
         let bw_f = self.get_bandwidth(0);
         let bw_s = self.get_bandwidth(1);
-        let owd_f = self.one_way_delay_pm.get_owd_pred(0);
-        let owd_s = self.one_way_delay_pm.get_owd_pred(1);
+        // let owd_f = self.one_way_delay_pm.get_owd_pred(0);
+        // let owd_s = self.one_way_delay_pm.get_owd_pred(1);
+        let owd_f = stats.rtt_init.as_millis() as f64;
+        let owd_s = stats.rtt_subseq.as_millis() as f64;
         // let bw = vec![bw_f, bw_s];
 
         // get occupied time
@@ -1409,6 +1412,7 @@ impl Connection {
 
             self.send_info[0].clear();
             self.send_info[1].clear();
+            info!("schedule_prio_mp queues {:?}", self.streams.priority_queues);
             for strict_queue in 0..MAXNUM_PRIORITY_QUEUE {
                 for i in 0..self.streams.priority_queues[strict_queue].len() {
                     let &id = self.streams.priority_queues[strict_queue]
@@ -1421,15 +1425,15 @@ impl Connection {
         }
 
         for block_i in 0..self.send_info[0].len() {
-            occupied_t_f = occupied_t_f +
-                self.send_info[0][block_i].unsend_size as f64 / bw_f / 1000.0;
+            occupied_t_f = occupied_t_f
+                + self.send_info[0][block_i].unsend_size as f64 / bw_f / 1000.0;
         }
         for block_i in 0..self.send_info[1].len() {
-            occupied_t_s = occupied_t_s +
-                self.send_info[1][block_i].unsend_size as f64 / bw_s / 1000.0;
+            occupied_t_s = occupied_t_s
+                + self.send_info[1][block_i].unsend_size as f64 / bw_s / 1000.0;
         }
-        while (self.send_info[0].is_empty() || self.send_info[1].is_empty()) &&
-            block_to_send
+        while (self.send_info[0].is_empty() || self.send_info[1].is_empty())
+            && block_to_send
         {
             match self.streams.peek_flushable_mp(
                 bw_f,
@@ -1467,8 +1471,8 @@ impl Connection {
                                 let stream =
                                     self.streams.get_mut(stream_id).unwrap();
                                 let mut unsend_f = ((stream.send_time[0] * bw_f)
-                                    .ceil() *
-                                    1000.0)
+                                    .ceil()
+                                    * 1000.0)
                                     as u64;
                                 info!(
                                     "send len {} unsend_f {}",
@@ -1489,8 +1493,8 @@ impl Connection {
                                         self.send_info[1].push_back(
                                             SendInfoOnPath {
                                                 streamid: stream_id,
-                                                unsend_size: stream.send.len -
-                                                    stream.send.len / 2,
+                                                unsend_size: stream.send.len
+                                                    - stream.send.len / 2,
                                             },
                                         );
                                         stream.assigned = true;
@@ -1529,8 +1533,8 @@ impl Connection {
                                     });
                                     self.send_info[1].push_back(SendInfoOnPath {
                                         streamid: stream_id,
-                                        unsend_size: stream.send.len -
-                                            stream.send.len / 2,
+                                        unsend_size: stream.send.len
+                                            - stream.send.len / 2,
                                     });
                                     stream.assigned = true;
                                 }
@@ -1845,8 +1849,8 @@ impl Connection {
         // Select packet number space epoch based on the received packet's type.
         let epoch = hdr.ty.to_epoch()?;
 
-        let aead = if hdr.ty == packet::Type::ZeroRTT &&
-            self.pkt_num_spaces[epoch].crypto_0rtt_open.is_some()
+        let aead = if hdr.ty == packet::Type::ZeroRTT
+            && self.pkt_num_spaces[epoch].crypto_0rtt_open.is_some()
         {
             self.pkt_num_spaces[epoch]
                 .crypto_0rtt_open
@@ -2514,10 +2518,10 @@ impl Connection {
 
         if pkt_type == packet::Type::Short && !is_closing {
             // Create HANDSHAKE_DONE frame.
-            if self.is_established() &&
-                !self.handshake_done_sent &&
-                self.is_server &&
-                self.version >= PROTOCOL_VERSION_DRAFT25
+            if self.is_established()
+                && !self.handshake_done_sent
+                && self.is_server
+                && self.version >= PROTOCOL_VERSION_DRAFT25
             {
                 let frame = frame::Frame::HandshakeDone;
 
@@ -2717,9 +2721,9 @@ impl Connection {
         //     "test_path_response_frame: {}",
         //     (test_crypto_frame - test_close_frame).as_micros() as u64
         // );
-        if self.pkt_num_spaces[epoch].crypto_stream.is_flushable() &&
-            left > frame::MAX_CRYPTO_OVERHEAD &&
-            !is_closing
+        if self.pkt_num_spaces[epoch].crypto_stream.is_flushable()
+            && left > frame::MAX_CRYPTO_OVERHEAD
+            && !is_closing
         {
             info!("create crypto frame");
             let crypto_len = left - frame::MAX_CRYPTO_OVERHEAD;
@@ -2745,10 +2749,10 @@ impl Connection {
         //     "test_crypto_frame: {}",
         //     (test_single_frame - test_crypto_frame).as_micros() as u64
         // );
-        if pkt_type == packet::Type::Short &&
-            self.max_tx_data > self.tx_data &&
-            left > frame::MAX_STREAM_OVERHEAD &&
-            !is_closing
+        if pkt_type == packet::Type::Short
+            && self.max_tx_data > self.tx_data
+            && left > frame::MAX_STREAM_OVERHEAD
+            && !is_closing
         {
             // let stats = self.stats();
             // let rtt = stats.rtt.as_millis() as f64;
@@ -2812,10 +2816,10 @@ impl Connection {
                 // Try to accurately account for the STREAM frame's overhead,
                 // such that we can fill as much of the packet buffer as
                 // possible.
-                let overhead = 1 +
-                    octets::varint_len(stream_id) +
-                    octets::varint_len(off) +
-                    octets::varint_len(max_len as u64);
+                let overhead = 1
+                    + octets::varint_len(stream_id)
+                    + octets::varint_len(off)
+                    + octets::varint_len(max_len as u64);
 
                 let max_len = match max_len.checked_sub(overhead) {
                     Some(v) => v,
@@ -2883,10 +2887,10 @@ impl Connection {
         );
 
         // Create PING for PTO probe.
-        if self.paths[schedule_path_id].recovery.loss_probes[epoch] > 0 &&
-            !ack_eliciting &&
-            left >= 1 &&
-            !is_closing
+        if self.paths[schedule_path_id].recovery.loss_probes[epoch] > 0
+            && !ack_eliciting
+            && left >= 1
+            && !is_closing
         {
             let frame = frame::Frame::Ping;
 
@@ -3131,8 +3135,8 @@ impl Connection {
         &mut self, stream_id: u64, out: &mut [u8],
     ) -> Result<(usize, bool)> {
         // We can't read on our own unidirectional streams.
-        if !stream::is_bidi(stream_id) &&
-            stream::is_local(stream_id, self.is_server)
+        if !stream::is_bidi(stream_id)
+            && stream::is_local(stream_id, self.is_server)
         {
             return Err(Error::InvalidStreamState);
         }
@@ -3228,8 +3232,8 @@ impl Connection {
         priority: u64,
     ) -> Result<usize> {
         // We can't write on the peer's unidirectional streams.
-        if !stream::is_bidi(stream_id) &&
-            !stream::is_local(stream_id, self.is_server)
+        if !stream::is_bidi(stream_id)
+            && !stream::is_local(stream_id, self.is_server)
         {
             return Err(Error::InvalidStreamState);
         }
@@ -3473,38 +3477,36 @@ impl Connection {
             // detection timers. If they are both unset (i.e. `None`) then the
             // result is `None`, but if at least one of them is set then a
             // `Some(...)` value is returned.
-            let loss_detection_timer_temp = if self.paths[0]
-                .recovery
-                .loss_detection_timer()
-                .is_some() &&
-                !self.paths[1].recovery.loss_detection_timer().is_some()
-            {
-                info!("init path timer");
-                self.paths[0].recovery.loss_detection_timer()
-            } else if !self.paths[0].recovery.loss_detection_timer().is_some() &&
-                self.paths[1].recovery.loss_detection_timer().is_some()
-            {
-                info!("subseq path timer");
-                self.paths[1].recovery.loss_detection_timer()
-            } else if self.paths[0].recovery.loss_detection_timer().is_some() &&
-                self.paths[1].recovery.loss_detection_timer().is_some()
-            {
-                info!(
-                    "first loss detection timer: {:?}",
+            let loss_detection_timer_temp =
+                if self.paths[0].recovery.loss_detection_timer().is_some()
+                    && !self.paths[1].recovery.loss_detection_timer().is_some()
+                {
+                    info!("init path timer");
                     self.paths[0].recovery.loss_detection_timer()
-                );
-                info!(
-                    "second loss detection timer: {:?}",
+                } else if !self.paths[0].recovery.loss_detection_timer().is_some()
+                    && self.paths[1].recovery.loss_detection_timer().is_some()
+                {
+                    info!("subseq path timer");
                     self.paths[1].recovery.loss_detection_timer()
-                );
-                info!("min");
-                cmp::min(
-                    self.paths[0].recovery.loss_detection_timer(),
-                    self.paths[1].recovery.loss_detection_timer(),
-                )
-            } else {
-                None
-            };
+                } else if self.paths[0].recovery.loss_detection_timer().is_some()
+                    && self.paths[1].recovery.loss_detection_timer().is_some()
+                {
+                    info!(
+                        "first loss detection timer: {:?}",
+                        self.paths[0].recovery.loss_detection_timer()
+                    );
+                    info!(
+                        "second loss detection timer: {:?}",
+                        self.paths[1].recovery.loss_detection_timer()
+                    );
+                    info!("min");
+                    cmp::min(
+                        self.paths[0].recovery.loss_detection_timer(),
+                        self.paths[1].recovery.loss_detection_timer(),
+                    )
+                } else {
+                    None
+                };
             info!("loss detection timer {:?}", loss_detection_timer_temp);
             let timers = [self.idle_timer, loss_detection_timer_temp];
 
@@ -3804,12 +3806,12 @@ impl Connection {
         }
 
         // If there are flushable streams, use Application.
-        if self.is_established() &&
-            (self.should_update_max_data() ||
-                self.streams.should_update_max_streams_bidi() ||
-                self.streams.should_update_max_streams_uni() ||
-                self.streams.has_flushable() ||
-                self.streams.has_almost_full())
+        if self.is_established()
+            && (self.should_update_max_data()
+                || self.streams.should_update_max_streams_bidi()
+                || self.streams.should_update_max_streams_uni()
+                || self.streams.has_flushable()
+                || self.streams.has_almost_full())
         {
             return Ok(packet::EPOCH_APPLICATION);
         }
@@ -3915,8 +3917,8 @@ impl Connection {
                 start_time,
             } => {
                 // Peer can't send on our unidirectional streams.
-                if !stream::is_bidi(stream_id) &&
-                    stream::is_local(stream_id, self.is_server)
+                if !stream::is_bidi(stream_id)
+                    && stream::is_local(stream_id, self.is_server)
                 {
                     return Err(Error::InvalidStreamState);
                 }
@@ -3938,8 +3940,8 @@ impl Connection {
                 error_code,
             } => {
                 // Peer can't send on our unidirectional streams.
-                if !stream::is_bidi(stream_id) &&
-                    stream::is_local(stream_id, self.is_server)
+                if !stream::is_bidi(stream_id)
+                    && stream::is_local(stream_id, self.is_server)
                 {
                     return Err(Error::InvalidStreamState);
                 }
@@ -3988,8 +3990,8 @@ impl Connection {
 
             frame::Frame::StopSending { stream_id, .. } => {
                 // STOP_SENDING on a receive-only stream is a fatal error.
-                if !stream::is_local(stream_id, self.is_server) &&
-                    !stream::is_bidi(stream_id)
+                if !stream::is_local(stream_id, self.is_server)
+                    && !stream::is_bidi(stream_id)
                 {
                     return Err(Error::InvalidStreamState);
                 }
@@ -4021,8 +4023,8 @@ impl Connection {
             frame::Frame::Stream { stream_id, data } => {
                 // Peer can't send on our unidirectional streams.
                 let process_stream_frame_begin_time = time::Instant::now();
-                if !stream::is_bidi(stream_id) &&
-                    stream::is_local(stream_id, self.is_server)
+                if !stream::is_bidi(stream_id)
+                    && stream::is_local(stream_id, self.is_server)
                 {
                     return Err(Error::InvalidStreamState);
                 }
@@ -4063,8 +4065,8 @@ impl Connection {
                 let process_stream_frame_end_time = time::Instant::now();
                 info!(
                     "process_frame: process stream frame:{}", // 18us
-                    (process_stream_frame_end_time -
-                        process_stream_frame_begin_time)
+                    (process_stream_frame_end_time
+                        - process_stream_frame_begin_time)
                         .as_micros() as u64
                 );
             },
@@ -4236,8 +4238,8 @@ impl Connection {
     /// This happens when the new max data limit is at least double the amount
     /// of data that can be received before blocking.
     fn should_update_max_data(&self) -> bool {
-        self.max_rx_data_next != self.max_rx_data &&
-            self.max_rx_data_next / 2 > self.max_rx_data - self.rx_data
+        self.max_rx_data_next != self.max_rx_data
+            && self.max_rx_data_next / 2 > self.max_rx_data - self.rx_data
     }
 
     /// Returns the idle timeout value.
@@ -4247,8 +4249,8 @@ impl Connection {
         // If the transport parameter is set to 0, then the respective endpoint
         // decided to disable the idle timeout. If both are disabled we should
         // not set any timeout.
-        if self.local_transport_params.max_idle_timeout == 0 &&
-            self.peer_transport_params.max_idle_timeout == 0
+        if self.local_transport_params.max_idle_timeout == 0
+            && self.peer_transport_params.max_idle_timeout == 0
         {
             return None;
         }
@@ -4881,8 +4883,8 @@ pub mod testing {
 
         hdr.to_bytes(&mut b)?;
 
-        let payload_len = frames.iter().fold(0, |acc, x| acc + x.wire_len()) +
-            space.overhead().unwrap();
+        let payload_len = frames.iter().fold(0, |acc, x| acc + x.wire_len())
+            + space.overhead().unwrap();
 
         if pkt_type != packet::Type::Short {
             let len = pn_len + payload_len;

@@ -213,15 +213,16 @@ impl StreamMap {
                     ),
 
                     // Remotely-initiated unidirectional stream.
-                    (false, false) =>
-                        (local_params.initial_max_stream_data_uni, 0),
+                    (false, false) => {
+                        (local_params.initial_max_stream_data_uni, 0)
+                    },
                 };
 
                 // Enforce stream count limits.
                 match (is_local(id, is_server), is_bidi(id)) {
                     (true, true) => {
-                        if self.local_opened_streams_bidi >=
-                            self.peer_max_streams_bidi
+                        if self.local_opened_streams_bidi
+                            >= self.peer_max_streams_bidi
                         {
                             return Err(Error::StreamLimit);
                         }
@@ -230,8 +231,8 @@ impl StreamMap {
                     },
 
                     (true, false) => {
-                        if self.local_opened_streams_uni >=
-                            self.peer_max_streams_uni
+                        if self.local_opened_streams_uni
+                            >= self.peer_max_streams_uni
                         {
                             return Err(Error::StreamLimit);
                         }
@@ -240,8 +241,8 @@ impl StreamMap {
                     },
 
                     (false, true) => {
-                        if self.peer_opened_streams_bidi >=
-                            self.local_max_streams_bidi
+                        if self.peer_opened_streams_bidi
+                            >= self.local_max_streams_bidi
                         {
                             return Err(Error::StreamLimit);
                         }
@@ -250,8 +251,8 @@ impl StreamMap {
                     },
 
                     (false, false) => {
-                        if self.peer_opened_streams_uni >=
-                            self.local_max_streams_uni
+                        if self.peer_opened_streams_uni
+                            >= self.local_max_streams_uni
                         {
                             return Err(Error::StreamLimit);
                         }
@@ -524,17 +525,17 @@ impl StreamMap {
     /// Returns true if the max bidirectional streams count needs to be updated
     /// by sending a MAX_STREAMS frame to the peer.
     pub fn should_update_max_streams_bidi(&self) -> bool {
-        self.local_max_streams_bidi_next != self.local_max_streams_bidi &&
-            self.local_max_streams_bidi_next / 2 >
-                self.local_max_streams_bidi - self.peer_opened_streams_bidi
+        self.local_max_streams_bidi_next != self.local_max_streams_bidi
+            && self.local_max_streams_bidi_next / 2
+                > self.local_max_streams_bidi - self.peer_opened_streams_bidi
     }
 
     /// Returns true if the max unidirectional streams count needs to be updated
     /// by sending a MAX_STREAMS frame to the peer.
     pub fn should_update_max_streams_uni(&self) -> bool {
-        self.local_max_streams_uni_next != self.local_max_streams_uni &&
-            self.local_max_streams_uni_next / 2 >
-                self.local_max_streams_uni - self.peer_opened_streams_uni
+        self.local_max_streams_uni_next != self.local_max_streams_uni
+            && self.local_max_streams_uni_next / 2
+                > self.local_max_streams_uni - self.peer_opened_streams_uni
     }
 
     /// Returns the number of active streams in the map.
@@ -602,8 +603,8 @@ impl StreamMap {
                 let m = owd_f + occupied_t_f;
                 let n = owd_s + occupied_t_s;
                 info!("m {} n {}", m, n);
-                let size_tmp = bandwidth_f * stream.send.len as f64 / 1000.0 +
-                    (n - m) * bandwidth_f * bandwidth_s;
+                let size_tmp = bandwidth_f * stream.send.len as f64 / 1000.0
+                    + (n - m) * bandwidth_f * bandwidth_s;
                 info!("size_tmp {}", size_tmp);
                 let mut size_first =
                     (size_tmp / (bandwidth_f + bandwidth_s)) as u64 * 1000;
@@ -714,9 +715,9 @@ impl StreamMap {
             bandwidth_f, bandwidth_s, owd_f, owd_s
         );
 
-        if self.priority_queues[0].is_empty() &&
-            self.priority_queues[1].is_empty() &&
-            self.priority_queues[2].is_empty()
+        if self.priority_queues[0].is_empty()
+            && self.priority_queues[1].is_empty()
+            && self.priority_queues[2].is_empty()
         {
             info!("Queues are empty.");
             return None;
@@ -760,7 +761,7 @@ impl StreamMap {
             let mut all_blocks_can_wait: bool = true;
 
             for strict_queue in 0..MAXNUM_PRIORITY_QUEUE {
-                for i in 0..self.priority_queues[strict_queue].len() {
+                for i in 0..self.priority_queues[strict_queue].len().min(5) {
                     let id: u64;
                     match self.priority_queues[strict_queue].get(i) {
                         Some(x) => id = *x,
@@ -793,10 +794,10 @@ impl StreamMap {
                         Err(_) => panic!("SystemTime before start time!"),
                     }
                     // The time this block can wait.
-                    let can_wait_time = stream.send.deadline as f64 -
-                        passed as f64 -
-                        stream.send_time[0] -
-                        owd_f;
+                    let can_wait_time = stream.send.deadline as f64
+                        - passed as f64
+                        - stream.send_time[0]
+                        - owd_f;
                     // The time this block send.
                     let sendt = stream.send_time[0].min(stream.send_time[1]);
                     // The time path being occupied.
@@ -831,13 +832,13 @@ impl StreamMap {
             }
             // All blocks in send buffer miss ddl.
             // Choose the block with min size and high priority.
-            if min_send_time == MAX_SEND_TIME &&
-                can_wait_min_send_time == MAX_SEND_TIME &&
-                has_block_miss_ddl
+            if min_send_time == MAX_SEND_TIME
+                && can_wait_min_send_time == MAX_SEND_TIME
+                && has_block_miss_ddl
             {
                 let mut min_size: u64 = 10000000;
                 for strict_queue in 0..MAXNUM_PRIORITY_QUEUE {
-                    for i in 0..self.priority_queues[strict_queue].len() {
+                    for i in 0..self.priority_queues[strict_queue].len().min(5) {
                         let id: u64;
                         match self.priority_queues[strict_queue].get(i) {
                             Some(x) => id = *x,
@@ -988,9 +989,9 @@ impl Stream {
     /// Returns true if the stream has enough flow control capacity to be
     /// written to, and is not finished.
     pub fn is_writable(&self) -> bool {
-        !self.send.shutdown &&
-            !self.send.is_fin() &&
-            self.send.off < self.send.max_data
+        !self.send.shutdown
+            && !self.send.is_fin()
+            && self.send.off < self.send.max_data
     }
 
     /// Returns true if the stream has data to send and is allowed to send at
@@ -1332,9 +1333,9 @@ impl RecvBuf {
     pub fn almost_full(&self) -> bool {
         // Send MAX_STREAM_DATA when the new limit is at least double the
         // amount of data that can be received before blocking.
-        self.fin_off.is_none() &&
-            self.max_data_next != self.max_data &&
-            self.max_data_next / 2 > self.max_data - self.len
+        self.fin_off.is_none()
+            && self.max_data_next != self.max_data
+            && self.max_data_next / 2 > self.max_data - self.len
     }
 
     /// Returns true if the receive-side of the stream is complete.
@@ -1592,10 +1593,10 @@ impl SendBuf {
         let mut out_len = max_data;
         let mut out_off = self.data.peek().map_or_else(|| out.off, RangeBuf::off);
 
-        while out_len > 0 &&
-            self.ready() &&
-            self.off() == out_off &&
-            self.off() < self.max_data
+        while out_len > 0
+            && self.ready()
+            && self.off() == out_off
+            && self.off() < self.max_data
         {
             let mut buf = match self.data.pop() {
                 Some(v) => v,

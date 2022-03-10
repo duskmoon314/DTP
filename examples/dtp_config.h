@@ -52,6 +52,7 @@ struct dtp_config* parse_dtp_config(const char *filename, int *number)
     fd = fopen(filename, "r");
     if (fd == NULL) {
         printf("fail to open config file.");
+        free(cfgs);
         *number = 0;
         return NULL;
     }

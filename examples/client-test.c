@@ -1,6 +1,5 @@
 #include <argp.h>
 #include <arpa/inet.h>
-#include <dtp_config.h>
 #include <errno.h>
 #include <ev.h>
 #include <fcntl.h>
@@ -15,26 +14,30 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "dtp_config.h"
 #include "helper.h"
 #include "uthash.h"
 
-/***** Argp configs START *****/
+/***** Argp configs *****/
 
-const char *argp_program_version = "client-libev 0.0.1";
-static char doc[] = "libev mpdtp client";
+const char *argp_program_version = "client-test 0.0.1";
+static char doc[] = "libev mpdtp client for test";
 static char args_doc[] =
     "SERVER_IP1 SERVER_PORT1 SERVER_IP2 SERVER_PORT2 "
     "CLIENT_IP1 CLIENT_PORT1 CLIENT_IP2 CLIENT_PORT2";
+#define ARGS_NUM 8
 
 static struct argp_option options[] = {
     {"log", 'l', "FILE", 0, "log file with debug and error info"},
     {"out", 'o', "FILE", 0, "output file with received file info"},
+    {"log-level", 'v', "LEVEL", 0, "log level ERROR 1 -> TRACE 5"},
+    {"color", 'c', 0, 0, "log with color"},
     {0}};
 
 struct arguments {
     FILE *log;
     FILE *out;
-    char *args[8];
+    char *args[ARGS_NUM];
 };
 
 static struct arguments args;
@@ -48,12 +51,18 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
         case 'o':
             arguments->out = fopen(arg, "w+");
             break;
+        case 'v':
+            LOG_LEVEL = arg ? atoi(arg) : 3;
+            break;
+        case 'c':
+            LOG_COLOR = 1;
+            break;
         case ARGP_KEY_ARG:
-            if (state->arg_num >= 8) argp_usage(state);
+            if (state->arg_num >= ARGS_NUM) argp_usage(state);
             arguments->args[state->arg_num] = arg;
             break;
         case ARGP_KEY_END:
-            if (state->arg_num < 8) argp_usage(state);
+            if (state->arg_num < ARGS_NUM) argp_usage(state);
             break;
 
         default:
@@ -69,9 +78,7 @@ static struct argp argp = {options, parse_opt, args_doc, doc};
 #define HELPER_LOG args.log
 #define HELPER_OUT args.out
 
-/***** Argp configs END *****/
-
-/***** DTP configs START *****/
+/***** DTP configs *****/
 
 #define LOCAL_CONN_ID_LEN 16
 #define MAX_DATAGRAM_SIZE 1350   // UDP
@@ -101,33 +108,28 @@ uint8_t server_pcid[LOCAL_CONN_ID_LEN];
 uint8_t client_pcid[LOCAL_CONN_ID_LEN];
 
 // MP: server -> client one way delay
-uint64_t one_way_delay = 0;
+// uint64_t one_way_delay = 0;
 
 uint64_t t_start = 0;
 uint64_t t_end = 0;
 
-/***** DTP configs END *****/
-
-/***** libev callback declare START *****/
+/***** callbacks *****/
 
 static void timeout_cb(struct ev_loop *loop, ev_timer *w, int revents);
 static void flush_packets(struct ev_loop *loop, struct conn_io *conn_io,
                           uint8_t path);
 
-/***** libev callback declare START *****/
-
-/***** libev callback START *****/
-
 static void send_packet(int sock, const void *buf, size_t size) {
-    uint64_t t = getCurrentTime_mic();
-    uint8_t *out_time = (uint8_t *)&t;
-    uint8_t out_with_time[MAX_DATAGRAM_SIZE + 2 * TIME_SIZE];
-    memcpy(out_with_time, out_time, TIME_SIZE);
-    out_time = (uint8_t *)&one_way_delay;
-    memcpy(out_with_time + TIME_SIZE, out_time, TIME_SIZE);
-    memcpy(out_with_time + 2 * TIME_SIZE, buf, size);
-    size += 2 * TIME_SIZE;
-    ssize_t sent = send(sock, out_with_time, size, 0);
+    // uint64_t t = getCurrentTime_mic();
+    // uint8_t *out_time = (uint8_t *)&t;
+    // uint8_t out_with_time[MAX_DATAGRAM_SIZE + 2 * TIME_SIZE];
+    // memcpy(out_with_time, out_time, TIME_SIZE);
+    // out_time = (uint8_t *)&one_way_delay;
+    // memcpy(out_with_time + TIME_SIZE, out_time, TIME_SIZE);
+    uint8_t out[MAX_DATAGRAM_SIZE];
+    memcpy(out, buf, size);
+    // size += 2 * TIME_SIZE;
+    ssize_t sent = send(sock, out, size, 0);
     if (sent < 0) {
         log_error("sendto error: %s", strerror(errno));
         return;
@@ -182,9 +184,9 @@ static void flush_packets(struct ev_loop *loop, struct conn_io *conn_io,
 
 static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
     struct conn_io *conn_io = w->data;
-    static uint8_t buf_with_time[MAX_BLOCK_SIZE];
+    // static uint8_t buf_with_time[MAX_BLOCK_SIZE];
     static uint8_t buf[MAX_BLOCK_SIZE];
-    static uint8_t read_time[TIME_SIZE];
+    // static uint8_t read_time[TIME_SIZE];
 
     log_debug("---------- recv_cb path %d----------", path);
 
@@ -192,7 +194,7 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
 
     while (true) {
         ssize_t nread =
-            recv(conn_io->socks[path], buf_with_time, sizeof(buf_with_time), 0);
+            recv(conn_io->socks[path], buf, sizeof(buf), 0);
         if (nread == 0) {
             log_error("no message to read");
             return;
@@ -209,15 +211,15 @@ static void recv_cb(struct ev_loop *loop, ev_io *w, int revents, uint8_t path) {
         log_debug("nread %lu", nread);
 
         // get trans time
-        memcpy(read_time, buf_with_time, TIME_SIZE);
-        uint64_t t1 = *(uint64_t *)read_time;
-        uint64_t t2 = getCurrentTime_mic();
-        log_debug("send: %lu recv: %lu\nserver to client trans time: %lu", t1,
-                  t2, t2 - t1);
+        // memcpy(read_time, buf_with_time, TIME_SIZE);
+        // uint64_t t1 = *(uint64_t *)read_time;
+        // uint64_t t2 = getCurrentTime_mic();
+        // log_debug("send: %lu recv: %lu\nserver to client trans time: %lu", t1,
+                //   t2, t2 - t1);
 
         // copy to buf
-        nread -= TIME_SIZE;
-        memcpy(buf, buf_with_time + TIME_SIZE, nread);
+        // nread -= TIME_SIZE;
+        // memcpy(buf, buf_with_time + TIME_SIZE, nread);
 
         ssize_t done = quiche_conn_recv(conn_io->conn, buf, nread, path);
         if (done == QUICHE_ERR_DONE) {
@@ -343,8 +345,6 @@ static void timeout_cb(struct ev_loop *loop, ev_timer *w, int revents) {
     }
     return;
 }
-
-/***** libev callback END *****/
 
 int64_t init_udp_client(const char *peer_addr, const char *peer_port,
                         const char *self_addr, const char *self_port) {

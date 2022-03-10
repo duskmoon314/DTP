@@ -29,10 +29,7 @@ use std::time;
 use ring::aead;
 
 use crate::Result;
-use crate::{
-    Error,
-    PATH_NUM,
-};
+use crate::{Error, PATH_NUM};
 
 use crate::crypto;
 use crate::octets;
@@ -798,8 +795,8 @@ impl PktNumWindow {
 
     fn upper(&self) -> u64 {
         self.lower
-            .saturating_add(std::mem::size_of::<u128>() as u64 * 8) -
-            1
+            .saturating_add(std::mem::size_of::<u128>() as u64 * 8)
+            - 1
     }
 }
 

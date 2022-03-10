@@ -67,13 +67,13 @@ impl OneWayDelayPredMeas {
     pub fn update_owd(&mut self, owd: f64, path: u8) {
         match path {
             0 => {
-                self.initial_path_owd = owd * self.ewma_alpha +
-                    self.initial_path_owd * (1.0 - self.ewma_alpha);
+                self.initial_path_owd = owd * self.ewma_alpha
+                    + self.initial_path_owd * (1.0 - self.ewma_alpha);
             },
 
             1 => {
-                self.subseq_path_owd = owd * self.ewma_alpha +
-                    self.subseq_path_owd * (1.0 - self.ewma_alpha);
+                self.subseq_path_owd = owd * self.ewma_alpha
+                    + self.subseq_path_owd * (1.0 - self.ewma_alpha);
             },
 
             _ => panic!("Path ID is wrong!"),
